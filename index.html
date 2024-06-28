@@ -200,20 +200,59 @@
 
         /* Responsive Styles */
         @media (max-width: 768px) {
+            .container {
+                padding: 0 10px;
+                text-align: center;
+            }
+
+            .section {
+                padding: 40px 0;
+            }
+
+            .hero-section {
+                height: auto;
+                padding: 60px 0;
+            }
+
             .hero-content h1 {
-                font-size: 36px;
+                font-size: 32px;
             }
 
             .hero-content p {
                 font-size: 18px;
             }
 
+            .cta-button {
+                display: inline-block;
+                margin-top: 20px;
+            }
+
+            nav ul {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            nav ul li {
+                margin: 10px 0;
+            }
+
+            .webcam-item video {
+                max-width: 100%;
+                height: auto;
+            }
+
             .section h2 {
                 font-size: 28px;
             }
 
-            .webcam-item {
+            form {
                 width: 100%;
+                max-width: 400px;
+                margin: 0 auto;
+            }
+
+            input, textarea {
+                font-size: 16px; /* Verhindert Zoom auf iOS */
             }
         }
 
@@ -226,13 +265,14 @@
                 font-size: 16px;
             }
 
-            .cta-button {
-                font-size: 16px;
+            .section h2 {
+                font-size: 24px;
             }
         }
     </style>
 </head>
 <body>
+    <!-- Der Rest des Body-Bereichs bleibt unverändert -->
     <header>
         <div class="container">
             <div class="logo">
@@ -339,6 +379,7 @@
     </footer>
 
     <script>
+        // Der gesamte JavaScript-Code bleibt unverändert
         // HLS Player Initialisierung
         document.addEventListener('DOMContentLoaded', function () {
             var video = document.getElementById('webcam-player');
@@ -418,24 +459,16 @@
             });
         }
 
-        // Admin-Link zum Footer hinzufügen
-        var footerLinks = document.querySelector('.footer-links');
-        var adminLink = document.createElement('a');
-        adminLink.href = '#admin-login';
-        adminLink.textContent = 'Admin';
-        adminLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            document.getElementById('admin-login').style.display = 'block';
-        });
-        footerLinks.appendChild(adminLink);
-
-
-
-
-
-
-
-
+     // Admin-Link zum Footer hinzufügen
+var footerLinks = document.querySelector('.footer-links');
+var adminLink = document.createElement('a');
+adminLink.href = '#admin-login';
+adminLink.textContent = 'Admin';
+adminLink.addEventListener('click', function(e) {
+    e.preventDefault();
+    document.getElementById('admin-login').style.display = 'block';
+});
+footerLinks.appendChild(adminLink);
 
 // Encoder-Steuerung
 function startEncoder() {
@@ -446,8 +479,15 @@ function startEncoder() {
         },
         body: 'action=start'
     })
-    .then(response => response.json())
-    .then(data => console.log('Encoder started:', data));
+    .then(response => response.text())
+    .then(data => {
+        console.log('Encoder gestartet:', data);
+        alert('Encoder wurde gestartet.');
+    })
+    .catch((error) => {
+        console.error('Fehler beim Starten des Encoders:', error);
+        alert('Fehler beim Starten des Encoders.');
+    });
 }
 
 function stopEncoder() {
@@ -458,32 +498,87 @@ function stopEncoder() {
         },
         body: 'action=stop'
     })
-    .then(response => response.json())
-    .then(data => console.log('Encoder stopped:', data));
+    .then(response => response.text())
+    .then(data => {
+        console.log('Encoder gestoppt:', data);
+        alert('Encoder wurde gestoppt.');
+    })
+    .catch((error) => {
+        console.error('Fehler beim Stoppen des Encoders:', error);
+        alert('Fehler beim Stoppen des Encoders.');
+    });
 }
 
-// Starten Sie den Encoder, wenn die Seite geladen wird
-document.addEventListener('DOMContentLoaded', startEncoder);
+// Event-Listener für Start- und Stop-Buttons
+document.getElementById('start-encoder').addEventListener('click', startEncoder);
+document.getElementById('stop-encoder').addEventListener('click', stopEncoder);
 
-// Stoppen Sie den Encoder, wenn der Benutzer die Seite verlässt
-window.addEventListener('beforeunload', stopEncoder);
+// Smooth Scrolling für Navigation-Links
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+        e.preventDefault();
 
-// Heartbeat, um zu prüfen, ob der Benutzer noch aktiv ist
-setInterval(() => {
-    fetch('stream_control.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'action=start'
+        document.querySelector(this.getAttribute('href')).scrollIntoView({
+            behavior: 'smooth'
+        });
     });
-}, 60000); // Alle 60 Sekunden
+});
 
+// Lazy Loading für Bilder
+document.addEventListener("DOMContentLoaded", function() {
+    var lazyImages = [].slice.call(document.querySelectorAll("img.lazy"));
 
+    if ("IntersectionObserver" in window) {
+        let lazyImageObserver = new IntersectionObserver(function(entries, observer) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    let lazyImage = entry.target;
+                    lazyImage.src = lazyImage.dataset.src;
+                    lazyImage.classList.remove("lazy");
+                    lazyImageObserver.unobserve(lazyImage);
+                }
+            });
+        });
 
+        lazyImages.forEach(function(lazyImage) {
+            lazyImageObserver.observe(lazyImage);
+        });
+    } else {
+        // Fallback für Browser ohne Intersection Observer
+        let active = false;
 
+        const lazyLoad = function() {
+            if (active === false) {
+                active = true;
 
+                setTimeout(function() {
+                    lazyImages.forEach(function(lazyImage) {
+                        if ((lazyImage.getBoundingClientRect().top <= window.innerHeight && lazyImage.getBoundingClientRect().bottom >= 0) && getComputedStyle(lazyImage).display !== "none") {
+                            lazyImage.src = lazyImage.dataset.src;
+                            lazyImage.classList.remove("lazy");
 
-    </script>
-</body>
+                            lazyImages = lazyImages.filter(function(image) {
+                                return image !== lazyImage;
+                            });
+
+                            if (lazyImages.length === 0) {
+                                document.removeEventListener("scroll", lazyLoad);
+                                window.removeEventListener("resize", lazyLoad);
+                                window.removeEventListener("orientationchange", lazyLoad);
+                            }
+                        }
+                    });
+
+                    active = false;
+                }, 200);
+            }
+        };
+
+        document.addEventListener("scroll", lazyLoad);
+        window.addEventListener("resize", lazyLoad);
+        window.addEventListener("orientationchange", lazyLoad);
+    }
+});
+            </script>
+  </body>
 </html>
