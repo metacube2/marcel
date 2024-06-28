@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora Wetter Lifecam - Einzigartige Live-Webcam und Wetter</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        /* Allgemeine Stile */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            line-height: 1.6;
+            background-image: url('main.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        header {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px 0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo img {
+            height: 50px;
+        }
+
+        nav ul {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+
+        nav ul li {
+            margin: 5px 10px;
+        }
+
+        nav ul li a {
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+        }
+
+        /* Hero-Bereich */
+        .hero-section {
+            height: 600px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #fff;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .hero-content h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .hero-content p {
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background-color: #ff5e3a;
+            color: #fff;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 18px;
+            transition: background-color 0.3s;
+        }
+
+        .cta-button:hover {
+            background-color: #ff3b1a;
+        }
+
+        /* Sektionen */
+        .section {
+            padding: 80px 0;
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
+        .section h2 {
+            font-size: 36px;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        /* Webcam-Bereich */
+        .webcam-grid {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .webcam-item {
+            text-align: center;
+            width: 100%;
+        }
+
+        .webcam-item h3 {
+            font-size: 24px;
+            margin-top: 20px;
+        }
+
+        /* Über uns */
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+
+        /* Kontakt */
+        form {
+            display: grid;
+            gap: 20px;
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button[type="submit"] {
+            background-color: #ff5e3a;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.3s;
+        }
+
+        button[type="submit"]:hover {
+            background-color: #ff3b1a;
+        }
+
+        /* Footer */
+        footer {
+            background-color: rgba(51, 51, 51, 0.8);
+            color: #fff;
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        .footer-links a {
+            color: #fff;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+
+        .footer-bottom {
+            margin-top: 20px;
+        }
+
+        /* Admin-Bereich */
+        #admin-login, #admin-messages {
+            display: none;
+        }
+
+        #message-list {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+        }
+
+        #message-list div {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+            .hero-content h1 {
+                font-size: 36px;
+            }
+
+            .hero-content p {
+                font-size: 18px;
+            }
+
+            .section h2 {
+                font-size: 28px;
+            }
+
+            .webcam-item {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .hero-content h1 {
+                font-size: 28px;
+            }
+
+            .hero-content p {
+                font-size: 16px;
+            }
+
+            .cta-button {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <img src="logo.png" alt="Aurora Wetter Lifecam Logo">
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#home">Start</a></li>
+                    <li><a href="#webcams">Webcam</a></li>
+                    <li><a href="#ueber-uns">Über uns</a></li>
+                    <li><a href="#kontakt">Kontakt</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section id="home" class="hero-section">
+            <div class="hero-content">
+                <h1>Willkommen bei Aurora Wetter Lifecam</h1>
+                <p>Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!</p>
+                <a href="#webcams" class="cta-button">Zu der Webcam</a>
+            </div>
+        </section>
+
+        <section id="webcams" class="section">
+            <div class="container">
+                <h2>Unsere Webcam</h2>
+                <div class="webcam-grid">
+                    <div class="webcam-item">
+                        <video id="webcam-player" controls autoplay muted></video>
+                        <h3>Zürichsee & Berge</h3>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="ueber-uns" class="section">
+            <div class="container">
+                <h2>Über unser Projekt</h2>
+                <div class="about-grid">
+                    <div class="about-item">
+                        <p>Aurora Wetter Lifecam ist ein Herzensprojekt von Wetterbegeisterten. Wir möchten Ihnen die Schönheit der Natur und Faszination des Wetters näher bringen.</p>
+                        <p>Dazu betreiben wir seit 2010 rund um die Uhr hochauflösende Webcams. Besonders stolz sind wir auf einzigartige Einblicke, wie z.B. die Trainingsflüge der Patrouille Suisse jeden Montagmorgen.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="kontakt" class="section">
+            <div class="container">
+                <h2>Kontakt</h2>
+                <p>Haben Sie Fragen, Anregungen oder möchten uns unterstützen? Wir freuen uns auf Ihre Nachricht!</p>
+                <form id="contact-form">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name" name="name" required>
+
+                    <label for="email">E-Mail:</label>
+                    <input type="email" id="email" name="email" required>
+
+                    <label for="message">Nachricht:</label>
+                    <textarea id="message" name="message" rows="5" required></textarea>
+
+                    <button type="submit">Absenden</button>
+                </form>
+            </div>
+        </section>
+
+        <section id="admin-login" class="section">
+            <div class="container">
+                <h2>Admin Login</h2>
+                <form id="login-form">
+                    <label for="username">Benutzername:</label>
+                    <input type="text" id="username" name="username" required>
+
+                    <label for="password">Passwort:</label>
+                    <input type="password" id="password" name="password" required>
+
+                    <button type="submit">Einloggen</button>
+                </form>
+            </div>
+        </section>
+
+        <section id="admin-messages" class="section">
+            <div class="container">
+                <h2>Admin-Bereich: Benutzernachrichten</h2>
+                <div id="message-list"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="#home">Start</a>
+                <a href="#webcams">Webcam</a>
+                <a href="#ueber-uns">Über uns</a>
+                <a href="#kontakt">Kontakt</a>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Aurora Wetter Lifecam</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // HLS Player Initialisierung
+        document.addEventListener('DOMContentLoaded', function () {
+            var video = document.getElementById('webcam-player');
+            var videoSrc = 'test_video.m3u8';
+            if (Hls.isSupported()) {
+                var hls = new Hls();
+                hls.loadSource(videoSrc);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    video.play();
+                });
+            }
+            else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = videoSrc;
+                video.addEventListener('loadedmetadata', function() {
+                    video.play();
+                });
+            }
+        });
+
+        // Kontaktformular-Verarbeitung
+        document.getElementById('contact-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+           
+            var name = document.getElementById('name').value;
+            var email = document.getElementById('email').value;
+            var message = document.getElementById('message').value;
+           
+            var feedback = {
+                name: name,
+                email: email,
+                message: message,
+                date: new Date().toISOString()
+            };
+           
+            // Simuliere das Speichern in einer Textdatei
+            var feedbacks = JSON.parse(localStorage.getItem('feedbacks') || '[]');
+            feedbacks.push(feedback);
+            localStorage.setItem('feedbacks', JSON.stringify(feedbacks));
+           
+            alert('Vielen Dank für Ihre Nachricht! Sie wurde gespeichert und wird bald überprüft.');
+           
+            this.reset();
+        });
+
+        // Admin-Login
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var username = document.getElementById('username').value;
+            var password = document.getElementById('password').value;
+           
+            // Einfache Authentifizierung (in der Praxis würden Sie das sicherer gestalten)
+            if(username === 'admin' && password === 'sonne4000') {
+                document.getElementById('admin-login').style.display = 'none';
+                document.getElementById('admin-messages').style.display = 'block';
+                showMessages();
+            } else {
+                alert('Ungültige Anmeldedaten');
+            }
+        });
+
+        // Nachrichten anzeigen
+        function showMessages() {
+            var feedbacks = JSON.parse(localStorage.getItem('feedbacks') || '[]');
+            var messageList = document.getElementById('message-list');
+            messageList.innerHTML = '';
+           
+            feedbacks.forEach(function(feedback) {
+                var messageDiv = document.createElement('div');
+                messageDiv.innerHTML = `
+                    <h3>${feedback.name} (${feedback.email})</h3>
+                    <p>${feedback.message}</p>
+                    <small>${feedback.date}</small>
+                    <hr>
+                `;
+                messageList.appendChild(messageDiv);
+            });
+        }
+
+        // Admin-Link zum Footer hinzufügen
+        var footerLinks = document.querySelector('.footer-links');
+        var adminLink = document.createElement('a');
+        adminLink.href = '#admin-login';
+        adminLink.textContent = 'Admin';
+        adminLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('admin-login').style.display = 'block';
+        });
+        footerLinks.appendChild(adminLink);
+
+
+
+
+
+
+
+
+
+// Encoder-Steuerung
+function startEncoder() {
+    fetch('stream_control.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=start'
+    })
+    .then(response => response.json())
+    .then(data => console.log('Encoder started:', data));
+}
+
+function stopEncoder() {
+    fetch('stream_control.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=stop'
+    })
+    .then(response => response.json())
+    .then(data => console.log('Encoder stopped:', data));
+}
+
+// Starten Sie den Encoder, wenn die Seite geladen wird
+document.addEventListener('DOMContentLoaded', startEncoder);
+
+// Stoppen Sie den Encoder, wenn der Benutzer die Seite verlässt
+window.addEventListener('beforeunload', stopEncoder);
+
+// Heartbeat, um zu prüfen, ob der Benutzer noch aktiv ist
+setInterval(() => {
+    fetch('stream_control.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=start'
+    });
+}, 60000); // Alle 60 Sekunden
+
+
+
+
+
+
+    </script>
+</body>
+</html>
