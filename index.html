@@ -10,6 +10,50 @@ class WebcamManager {
         return '<video id="webcam-player" controls autoplay muted></video>';
     }
 
+    public function captureSnapshot() {
+        $outputFile = 'snapshot_' . date('YmdHis') . '.jpg';
+        $command = "ffmpeg -i {$this->videoSrc} -vframes 1 -q:v 2 {$outputFile}";
+        
+        exec($command, $output, $returnVar);
+
+        if ($returnVar !== 0) {
+            return "Fehler beim Erstellen des Snapshots.";
+        }
+
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $outputFile . '"');
+        readfile($outputFile);
+        unlink($outputFile);
+        exit;
+    }
+
+    public function captureVideoSequence($duration = 10) {
+        $outputFile = 'sequence_' . date('YmdHis') . '.mp4';
+        $command = "ffmpeg -i {$this->videoSrc} -t {$duration} -c copy {$outputFile}";
+        
+        exec($command, $output, $returnVar);
+
+        if ($returnVar !== 0) {
+            return "Fehler beim Erstellen der Video-Sequenz.";
+        }
+
+        header('Content-Type: video/mp4');
+        header('Content-Disposition: attachment; filename="' . $outputFile . '"');
+        readfile($outputFile);
+        unlink($outputFile);
+        exit;
+    }
+
+
+
+
+
+
+
+
+
+    
+
     public function getJavaScript() {
         return "
         document.addEventListener('DOMContentLoaded', function () {
@@ -270,6 +314,18 @@ $guestbookManager = new GuestbookManager();
 $contactManager = new ContactManager();
 $adminManager = new AdminManager();
 
+if (isset($_GET['action'])) {
+    switch ($_GET['action']) {
+        case 'snapshot':
+            $webcamManager->captureSnapshot();
+            break;
+        case 'sequence':
+            $webcamManager->captureVideoSequence();
+            break;
+    }
+}
+
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['guestbook'])) {
         $guestbookManager->handleFormSubmission();
@@ -496,6 +552,10 @@ footer {
         <h2>Unsere Webcam</h2>
         <div class="video-container">
             <?php echo $webcamManager->displayWebcam(); ?>
+        </div>
+        <div class="webcam-controls">
+            <a href="?action=snapshot" class="button">Snapshot herunterladen</a>
+            <a href="?action=sequence" class="button">Video-Sequenz herunterladen</a>
         </div>
     </div>
 </section>
