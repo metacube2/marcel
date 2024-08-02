@@ -126,14 +126,16 @@ class AdminManager {
     public function isAdmin() {
         return isset($_SESSION['admin']) && $_SESSION['admin'] === true;
     }
-
     public function handleLogin($username, $password) {
+        echo "Login-Versuch: Username = $username, Passwort = $password"; // Debugging
         if ($username === 'admin' && $password === 'sonne4000') {
             $_SESSION['admin'] = true;
             return true;
         }
         return false;
     }
+    
+    
 
     public function displayLoginForm() {
         return '
@@ -235,6 +237,38 @@ header {
     top: 0;
     z-index: 100;
 }
+
+
+
+#webcam-player {
+    max-width: 100%;
+    height: auto;
+    max-height: 70vh; /* Begrenzt die Höhe auf 70% der Bildschirmhöhe */
+    display: block;
+    margin: 0 auto;
+}
+
+.video-container {
+    position: relative;
+    padding-bottom: 56.25%; /* 16:9 Seitenverhältnis */
+    height: 0;
+    overflow: hidden;
+}
+
+.video-container #webcam-player {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+
+
+
+
+
+
 .logo img {
     height: 50px;
 }
@@ -354,6 +388,12 @@ footer {
 <body>
     <header>
         <div class="container">
+
+        <div class="logo">
+                <img src="logo.png" alt="Aurora Wetter Livecam">
+            </div>
+
+
             <nav>
                 <ul>
                     <li><a href="#webcams">Webcam</a></li>
@@ -369,13 +409,15 @@ footer {
     </header>
 
 
-    <main>
-        <section id="webcams" class="section">
-            <div class="container">
-                <h2>Unsere Webcam</h2>
-                <?php echo $webcamManager->displayWebcam(); ?>
-            </div>
-        </section>
+    <section id="webcams" class="section">
+    <div class="container">
+        <h2>Unsere Webcam</h2>
+        <div class="video-container">
+            <?php echo $webcamManager->displayWebcam(); ?>
+        </div>
+    </div>
+</section>
+
 
 
 
