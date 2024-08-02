@@ -135,8 +135,57 @@ class AdminManager {
         return false;
     }
     
+    public function handleImageUpload($file) {
+        if (!$this->isAdmin()) {
+            return false; // Nur Admins dürfen Bilder hochladen
+        }
     
-
+        // Überprüfen Sie, ob eine Datei hochgeladen wurde
+        if (!isset($file['tmp_name']) || empty($file['tmp_name'])) {
+            echo "Keine Datei hochgeladen.";
+            return false;
+        }
+    
+        $target_dir = "uploads/";
+        if (!file_exists($target_dir)) {
+            mkdir($target_dir, 0777, true);
+        }
+    
+        $target_file = $target_dir . basename($file["name"]);
+        $uploadOk = 1;
+        $imageFileType = strtolower(pathinfo($target_file,PATHINFO_EXTENSION));
+    
+      
+        $check = @getimagesize($file["tmp_name"]);
+        if($check === false) {
+            echo "Die Datei ist kein Bild.";
+            return false;
+        }
+    
+    
+        if ($file["size"] > 5000000) { // 5MB Limit
+            echo "Die Datei ist zu groß.";
+            return false;
+        }
+    
+        // Erlauben Sie nur bestimmte Dateiformate
+        if($imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg"
+        && $imageFileType != "gif" ) {
+            echo "Nur JPG, JPEG, PNG & GIF Dateien sind erlaubt.";
+            return false;
+        }
+    
+        // Wenn alles in Ordnung ist, versuchen Sie, die Datei hochzuladen
+        if (move_uploaded_file($file["tmp_name"], $target_file)) {
+            echo "Die Datei ". basename( $file["name"]). " wurde hochgeladen.";
+            return true;
+        } else {
+            echo "Es gab einen Fehler beim Hochladen der Datei.";
+            return false;
+        }
+    }
+    
+    
     public function displayLoginForm() {
         return '
         <form id="login-form" method="post">
@@ -173,9 +222,41 @@ class AdminManager {
             <input type="url" name="social-url" placeholder="Profil URL" required>
             <button type="submit">Aktualisieren</button>
         </form>';
-
+        $output .= '
+        <h3>Bild hochladen</h3>
+        <form action="" method="post" enctype="multipart/form-data">
+            <input type="file" name="fileToUpload" id="fileToUpload">
+            <input type="submit" value="Bild hochladen" name="submit">
+        </form>';
         return $output;
     }
+    
+     public function displayGalleryImages() {
+        $output = '';
+        $files = glob("uploads/*.*");
+        foreach($files as $file) {
+            $output .= '<img src="'.$file.'" style="width:200px; height:auto; margin:10px;">';
+        }
+        return $output;
+    }
+ 
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
     public function handleSocialMediaUpdate($platform, $url) {
         $socialLinks = json_decode(file_get_contents('social_links.json') ?: '{}', true);
@@ -198,8 +279,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $adminManager->handleLogin($_POST['username'], $_POST['password']);
     } elseif (isset($_POST['update-social-media'])) {
         $adminManager->handleSocialMediaUpdate($_POST['social-platform'], $_POST['social-url']);
-    }
-}
+    } elseif (isset($_FILES["fileToUpload"]) && $adminManager->isAdmin()) {
+        $adminManager->handleImageUpload($_FILES["fileToUpload"]);
+}}
 ?>
 
 
@@ -460,7 +542,10 @@ footer {
         <section id="gallery" class="section">
             <div class="container">
                 <h2>Bildergalerie</h2>
-                <div id="public-gallery-images"></div>
+                <div id="gallery-images">
+                <?php echo $adminManager->displayGalleryImages(); ?>
+
+        </div>
             </div>
         </section>
 
