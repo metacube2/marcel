@@ -1,3 +1,208 @@
+<?php
+session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+class WebcamManager {
+    private $videoSrc = 'test_video.m3u8';
+
+    public function displayWebcam() {
+        return '<video id="webcam-player" controls autoplay muted></video>';
+    }
+
+    public function getJavaScript() {
+        return "
+        document.addEventListener('DOMContentLoaded', function () {
+            var video = document.getElementById('webcam-player');
+            var videoSrc = '{$this->videoSrc}';
+            if (Hls.isSupported()) {
+                var hls = new Hls();
+                hls.loadSource(videoSrc);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                    video.play();
+                });
+            }
+            else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = videoSrc;
+                video.addEventListener('loadedmetadata', function () {
+                    video.play();
+                });
+            }
+        });
+        ";
+    }
+
+    public function setVideoSrc($src) {
+        $this->videoSrc = $src;
+    }
+}
+
+class GuestbookManager {
+    private $entries = [];
+    private $dbFile = 'guestbook.json';
+
+    public function __construct() {
+        if (file_exists($this->dbFile)) {
+            $this->entries = json_decode(file_get_contents($this->dbFile), true);
+        }
+    }
+
+    public function handleFormSubmission() {
+        if (isset($_POST['guestbook'], $_POST['guest-name'], $_POST['guest-message'])) {
+            $this->addEntry($_POST['guest-name'], $_POST['guest-message']);
+            $this->saveEntries();
+        }
+    }
+
+    private function addEntry($name, $message) {
+        $this->entries[] = [
+            'name' => $name,
+            'message' => $message,
+            'date' => date('Y-m-d H:i:s')
+        ];
+    }
+
+    private function saveEntries() {
+        file_put_contents($this->dbFile, json_encode($this->entries));
+    }
+
+    public function displayForm() {
+        return '
+        <form method="post">
+            <input type="hidden" name="guestbook" value="1">
+            <label for="guest-name">Name:</label>
+            <input type="text" id="guest-name" name="guest-name" required>
+            <label for="guest-message">Nachricht:</label>
+            <textarea id="guest-message" name="guest-message" required></textarea>
+            <button type="submit">Eintrag hinzufügen</button>
+        </form>';
+    }
+
+    public function displayEntries() {
+        $output = '<div id="guestbook-entries">';
+        foreach ($this->entries as $entry) {
+            $output .= "
+            <div class='guestbook-entry'>
+                <h4>{$entry['name']}</h4>
+                <p>{$entry['message']}</p>
+                <small>{$entry['date']}</small>
+            </div>";
+        }
+        $output .= '</div>';
+        return $output;
+    }
+}
+
+class ContactManager {
+    public function displayForm() {
+        return '
+        <form method="post">
+            <input type="hidden" name="contact" value="1">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" required>
+            <label for="email">E-Mail:</label>
+            <input type="email" id="email" name="email" required>
+            <label for="message">Nachricht:</label>
+            <textarea id="message" name="message" required></textarea>
+            <button type="submit">Nachricht senden</button>
+        </form>';
+    }
+
+    public function handleSubmission($name, $email, $message) {
+        $feedback = [
+            'name' => $name,
+            'email' => $email,
+            'message' => $message,
+            'date' => date('Y-m-d H:i:s')
+        ];
+        $feedbacks = json_decode(file_get_contents('feedbacks.json') ?: '[]', true);
+        $feedbacks[] = $feedback;
+        file_put_contents('feedbacks.json', json_encode($feedbacks));
+    }
+}
+
+class AdminManager {
+    public function isAdmin() {
+        return isset($_SESSION['admin']) && $_SESSION['admin'] === true;
+    }
+
+    public function handleLogin($username, $password) {
+        if ($username === 'admin' && $password === 'sonne4000') {
+            $_SESSION['admin'] = true;
+            return true;
+        }
+        return false;
+    }
+
+    public function displayLoginForm() {
+        return '
+        <form id="login-form" method="post">
+            <input type="hidden" name="admin-login" value="1">
+            <label for="username">Benutzername:</label>
+            <input type="text" id="username" name="username" required>
+            <label for="password">Passwort:</label>
+            <input type="password" id="password" name="password" required>
+            <button type="submit">Einloggen</button>
+        </form>';
+    }
+
+    public function displayAdminContent() {
+        $feedbacks = json_decode(file_get_contents('feedbacks.json') ?: '[]', true);
+        $output = '<h3>Admin-Bereich</h3><div id="message-list">';
+        foreach ($feedbacks as $feedback) {
+            $output .= "<div>";
+            $output .= "<h4>{$feedback['name']} ({$feedback['email']})</h4>";
+            $output .= "<p>{$feedback['message']}</p>";
+            $output .= "<small>{$feedback['date']}</small>";
+            $output .= "</div>";
+        }
+        $output .= '</div>';
+
+        $output .= '
+        <h3>Social Media Links verwalten</h3>
+        <form id="social-media-form" method="post">
+            <input type="hidden" name="update-social-media" value="1">
+            <select name="social-platform" required>
+                <option value="facebook">Facebook</option>
+                <option value="instagram">Instagram</option>
+                <option value="tiktok">TikTok</option>
+            </select>
+            <input type="url" name="social-url" placeholder="Profil URL" required>
+            <button type="submit">Aktualisieren</button>
+        </form>';
+
+        return $output;
+    }
+
+    public function handleSocialMediaUpdate($platform, $url) {
+        $socialLinks = json_decode(file_get_contents('social_links.json') ?: '{}', true);
+        $socialLinks[$platform] = $url;
+        file_put_contents('social_links.json', json_encode($socialLinks));
+    }
+}
+
+$webcamManager = new WebcamManager();
+$guestbookManager = new GuestbookManager();
+$contactManager = new ContactManager();
+$adminManager = new AdminManager();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['guestbook'])) {
+        $guestbookManager->handleFormSubmission();
+    } elseif (isset($_POST['contact'])) {
+        $contactManager->handleSubmission($_POST['name'], $_POST['email'], $_POST['message']);
+    } elseif (isset($_POST['admin-login'])) {
+        $adminManager->handleLogin($_POST['username'], $_POST['password']);
+    } elseif (isset($_POST['update-social-media'])) {
+        $adminManager->handleSocialMediaUpdate($_POST['social-platform'], $_POST['social-url']);
+    }
+}
+?>
+
+
+
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -6,371 +211,246 @@
     <title>Aurora Wetter Lifecam - Einzigartige Live-Webcam und Wetter</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        /* Allgemeine Stile */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            color: #333;
-            line-height: 1.6;
-            background-image: url('main.jpg');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    color: #333;
+    line-height: 1.6;
+    background-image: url('main.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+header {
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 10px 0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.logo img {
+    height: 50px;
+}
+nav ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+}
+nav ul li {
+    margin: 5px 10px;
+}
+nav ul li a {
+    text-decoration: none;
+    color: #333;
+    font-weight: bold;
+}
+.section {
+    padding: 80px 0;
+    background-color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 20px;
+}
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
 
-        /* Header */
-        header {
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 10px 0;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
+#qrcode {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+#qrcode img {
+    border: 10px solid white;
+}
 
-        .logo img {
-            height: 50px;
-        }
 
-        nav ul {
-            list-style: none;
-            padding: 0;
-            display: flex;
-            justify-content: space-around;
-            flex-wrap: wrap;
-        }
+.section h2 {
+    font-size: 36px;
+    margin-bottom: 40px;
+    text-align: center;
+}
+form {
+    display: grid;
+    gap: 20px;
+}
+input, textarea, button[type="submit"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+button[type="submit"] {
+    background-color: #ff5e3a;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    transition: background-color 0.3s;
+}
+button[type="submit"]:hover {
+    background-color: #ff3b1a;
+}
+footer {
+    background-color: rgba(51, 51, 51, 0.8);
+    color: #fff;
+    padding: 40px 0;
+    text-align: center;
+}
+.footer-links a {
+    color: #fff;
+    text-decoration: none;
+    margin: 0 10px;
+}
+#guestbook-entries {
+    max-height: 300px;
+    overflow-y: auto;
+}
+.guestbook-entry {
+    border-bottom: 1px solid #ddd;
+    padding: 10px 0;
+}
+#social-media-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+#social-media-links a {
+    margin: 0 10px;
+}
+@media (max-width: 768px) {
+    .container {
+        padding: 0 10px;
+    }
+    .section {
+        padding: 40px 0;
+    }
+    nav ul {
+        flex-direction: column;
+        align-items: center;
+    }
+    nav ul li {
+        margin: 10px 0;
+    }
+}
 
-        nav ul li {
-            margin: 5px 10px;
-        }
-
-        nav ul li a {
-            text-decoration: none;
-            color: #333;
-            font-weight: bold;
-        }
-
-        /* Hero-Bereich */
-        .hero-section {
-            height: 600px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            color: #fff;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-
-        .hero-content h1 {
-            font-size: 48px;
-            margin-bottom: 20px;
-        }
-
-        .hero-content p {
-            font-size: 24px;
-            margin-bottom: 30px;
-        }
-
-        .cta-button {
-            display: inline-block;
-            background-color: #ff5e3a;
-            color: #fff;
-            padding: 10px 20px;
-            text-decoration: none;
-            border-radius: 5px;
-            font-size: 18px;
-            transition: background-color 0.3s;
-        }
-
-        .cta-button:hover {
-            background-color: #ff3b1a;
-        }
-
-        /* Sektionen */
-        .section {
-            padding: 80px 0;
-            background-color: rgba(255, 255, 255, 0.8);
-        }
-
-        .section h2 {
-            font-size: 36px;
-            margin-bottom: 40px;
-            text-align: center;
-        }
-
-        /* Webcam-Bereich */
-        .webcam-grid {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .webcam-item {
-            text-align: center;
-            width: 100%;
-        }
-
-        .webcam-item h3 {
-            font-size: 24px;
-            margin-top: 20px;
-        }
-
-        /* Über uns */
-        .about-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 40px;
-            align-items: center;
-        }
-
-        /* Kontakt */
-        form {
-            display: grid;
-            gap: 20px;
-        }
-
-        label {
-            font-weight: bold;
-        }
-
-        input,
-        textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-
-        button[type="submit"] {
-            background-color: #ff5e3a;
-            color: #fff;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: background-color 0.3s;
-        }
-
-        button[type="submit"]:hover {
-            background-color: #ff3b1a;
-        }
-
-        /* Footer */
-        footer {
-            background-color: rgba(51, 51, 51, 0.8);
-            color: #fff;
-            padding: 40px 0;
-            text-align: center;
-        }
-
-        .footer-links a {
-            color: #fff;
-            text-decoration: none;
-            margin: 0 10px;
-        }
-
-        .footer-bottom {
-            margin-top: 20px;
-        }
-
-        /* Admin-Bereich */
-        #admin-login, #admin-messages {
-            display: none;
-        }
-
-        #message-list {
-            background-color: #f9f9f9;
-            padding: 20px;
-            border-radius: 5px;
-        }
-
-        #message-list div {
-            margin-bottom: 20px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #ddd;
-        }
-
-        /* Responsive Styles */
-        @media (max-width: 768px) {
-            .container {
-                padding: 0 10px;
-                text-align: center;
-            }
-
-            .section {
-                padding: 40px 0;
-            }
-
-            .hero-section {
-                height: auto;
-                padding: 60px 0;
-            }
-
-            .hero-content h1 {
-                font-size: 32px;
-            }
-
-            .hero-content p {
-                font-size: 18px;
-            }
-
-            .cta-button {
-                display: inline-block;
-                margin-top: 20px;
-            }
-
-            nav ul {
-                flex-direction: column;
-                align-items: center;
-            }
-
-            nav ul li {
-                margin: 10px 0;
-            }
-
-            .webcam-item video {
-                max-width: 100%;
-                height: auto;
-            }
-
-            .section h2 {
-                font-size: 28px;
-            }
-
-            form {
-                width: 100%;
-                max-width: 400px;
-                margin: 0 auto;
-            }
-
-            input, textarea {
-                font-size: 16px; /* Verhindert Zoom auf iOS */
-            }
-        }
-
-        @media (max-width: 480px) {
-            .hero-content h1 {
-                font-size: 28px;
-            }
-
-            .hero-content p {
-                font-size: 16px;
-            }
-
-            .section h2 {
-                font-size: 24px;
-            }
-        }
     </style>
 </head>
 <body>
-    <!-- Der Rest des Body-Bereichs bleibt unverändert -->
     <header>
         <div class="container">
-            <div class="logo">
-                <img src="logo.png" alt="Aurora Wetter Lifecam Logo">
-            </div>
             <nav>
                 <ul>
-                    <li><a href="#home">Start</a></li>
                     <li><a href="#webcams">Webcam</a></li>
-                    <li><a href="#ueber-uns">Über uns</a></li>
+                    <li><a href="#guestbook">Gästebuch</a></li>
                     <li><a href="#kontakt">Kontakt</a></li>
+                    <li><a href="#gallery">Galerie</a></li>
+                    <?php if ($adminManager->isAdmin()): ?>
+                        <li><a href="#admin">Admin</a></li>
+                    <?php endif; ?>
                 </ul>
             </nav>
         </div>
     </header>
 
-    <main>
-        <section id="home" class="hero-section">
-            <div class="hero-content">
-                <h1>Willkommen bei Aurora Wetter Lifecam</h1>
-                <p>Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!</p>
-                <a href="#webcams" class="cta-button">Zu der Webcam</a>
-            </div>
-        </section>
 
+    <main>
         <section id="webcams" class="section">
             <div class="container">
                 <h2>Unsere Webcam</h2>
-                <div class="webcam-grid">
-                    <div class="webcam-item">
-                        <video id="webcam-player" controls autoplay muted></video>
-                        <h3>Zürichsee & Berge</h3>
-                    </div>
-                </div>
+                <?php echo $webcamManager->displayWebcam(); ?>
             </div>
         </section>
 
-        <section id="ueber-uns" class="section">
+
+
+
+
+
+        <section id="qr-code" class="section">
+        <div class="container">
+            <h2>QR-Code für diese Seite</h2>
+            <div id="qrcode"></div>
+        </div>
+        </section>
+
+
+
+
+
+
+
+
+
+
+        <section id="guestbook" class="section">
             <div class="container">
-                <h2>Über unser Projekt</h2>
-                <div class="about-grid">
-                    <div class="about-item">
-                        <p>Aurora Wetter Lifecam ist ein Herzensprojekt von Wetterbegeisterten. Wir möchten Ihnen die Schönheit der Natur und Faszination des Wetters näher bringen.</p>
-                        <p>Dazu betreiben wir seit 2010 rund um die Uhr hochauflösende Webcams. Besonders stolz sind wir auf einzigartige Einblicke, wie z.B. die Trainingsflüge der Patrouille Suisse jeden Montagmorgen.</p>
-                    </div>
-                </div>
+                <h2>Gästebuch</h2>
+                <?php 
+                echo $guestbookManager->displayForm();
+                echo $guestbookManager->displayEntries();
+                ?>
             </div>
         </section>
 
         <section id="kontakt" class="section">
             <div class="container">
                 <h2>Kontakt</h2>
-                <p>Haben Sie Fragen, Anregungen oder möchten uns unterstützen? Wir freuen uns auf Ihre Nachricht!</p>
-                <form id="contact-form">
-                    <label for="name">Name:</label>
-                    <input type="text" id="name" name="name" required>
-
-                    <label for="email">E-Mail:</label>
-                    <input type="email" id="email" name="email" required>
-
-                    <label for="message">Nachricht:</label>
-                    <textarea id="message" name="message" rows="5" required></textarea>
-
-                    <button type="submit">Absenden</button>
-                </form>
+                <?php echo $contactManager->displayForm(); ?>
             </div>
         </section>
 
+        <section id="gallery" class="section">
+            <div class="container">
+                <h2>Bildergalerie</h2>
+                <div id="public-gallery-images"></div>
+            </div>
+        </section>
+
+        <?php if ($adminManager->isAdmin()): ?>
+        <section id="admin" class="section">
+            <div class="container">
+                <h2>Admin-Bereich</h2>
+                <?php echo $adminManager->displayAdminContent(); ?>
+            </div>
+        </section>
+        <?php else: ?>
         <section id="admin-login" class="section">
             <div class="container">
                 <h2>Admin Login</h2>
-                <form id="login-form">
-                    <label for="username">Benutzername:</label>
-                    <input type="text" id="username" name="username" required>
-
-                    <label for="password">Passwort:</label>
-                    <input type="password" id="password" name="password" required>
-
-                    <button type="submit">Einloggen</button>
-                </form>
+                <?php echo $adminManager->displayLoginForm(); ?>
             </div>
         </section>
+        <?php endif; ?>
 
-        <section id="admin-messages" class="section">
+        <section id="social-media" class="section">
             <div class="container">
-                <h2>Admin-Bereich: Benutzernachrichten</h2>
-                <div id="message-list"></div>
+                <h2>Folgen Sie uns</h2>
+                <div id="social-media-links"></div>
             </div>
         </section>
+
+
+
+        
+
+
+
+
     </main>
 
     <footer>
         <div class="container">
             <div class="footer-links">
-                <a href="#home">Start</a>
                 <a href="#webcams">Webcam</a>
-                <a href="#ueber-uns">Über uns</a>
+                <a href="#guestbook">Gästebuch</a>
                 <a href="#kontakt">Kontakt</a>
+                <a href="#gallery">Galerie</a>
             </div>
             <div class="footer-bottom">
                 <p>&copy; 2024 Aurora Wetter Lifecam</p>
@@ -378,207 +458,80 @@
         </div>
     </footer>
 
+
+
+    <script src="https://www.youtube.com/iframe_api"></script>
     <script>
-        // Der gesamte JavaScript-Code bleibt unverändert
-        // HLS Player Initialisierung
-        document.addEventListener('DOMContentLoaded', function () {
-            var video = document.getElementById('webcam-player');
-            var videoSrc = 'test_video.m3u8';
-            if (Hls.isSupported()) {
-                var hls = new Hls();
-                hls.loadSource(videoSrc);
-                hls.attachMedia(video);
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    video.play();
-                });
-            }
-            else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = videoSrc;
-                video.addEventListener('loadedmetadata', function() {
-                    video.play();
-                });
-            }
-        });
+        // Webcam-Player-Logik
+        <?php echo $webcamManager->getJavaScript(); ?>
 
-        // Kontaktformular-Verarbeitung
-        document.getElementById('contact-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-           
-            var name = document.getElementById('name').value;
-            var email = document.getElementById('email').value;
-            var message = document.getElementById('message').value;
-           
-            var feedback = {
-                name: name,
-                email: email,
-                message: message,
-                date: new Date().toISOString()
-            };
-           
-            // Simuliere das Speichern in einer Textdatei
-            var feedbacks = JSON.parse(localStorage.getItem('feedbacks') || '[]');
-            feedbacks.push(feedback);
-            localStorage.setItem('feedbacks', JSON.stringify(feedbacks));
-           
-            alert('Vielen Dank für Ihre Nachricht! Sie wurde gespeichert und wird bald überprüft.');
-           
-            this.reset();
-        });
+        // Social Media Manager
+        function updateSocialMediaLinks() {
+            fetch('social_links.json')
+                .then(response => response.json())
+                .then(data => {
+                    const socialLinksContainer = document.getElementById('social-media-links');
+                    socialLinksContainer.innerHTML = '';
+                    for (const [platform, url] of Object.entries(data)) {
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.target = '_blank';
+                        link.textContent = platform.charAt(0).toUpperCase() + platform.slice(1);
+                        socialLinksContainer.appendChild(link);
+                    }
+                })
+                .catch(error => console.error('Error loading social media links:', error));
+        }
 
-        // Admin-Login
-        document.getElementById('login-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            var username = document.getElementById('username').value;
-            var password = document.getElementById('password').value;
-           
-            // Einfache Authentifizierung (in der Praxis würden Sie das sicherer gestalten)
-            if(username === 'admin' && password === 'sonne4000') {
-                document.getElementById('admin-login').style.display = 'none';
-                document.getElementById('admin-messages').style.display = 'block';
-                showMessages();
-            } else {
-                alert('Ungültige Anmeldedaten');
-            }
-        });
-
-        // Nachrichten anzeigen
-        function showMessages() {
-            var feedbacks = JSON.parse(localStorage.getItem('feedbacks') || '[]');
-            var messageList = document.getElementById('message-list');
-            messageList.innerHTML = '';
-           
-            feedbacks.forEach(function(feedback) {
-                var messageDiv = document.createElement('div');
-                messageDiv.innerHTML = `
-                    <h3>${feedback.name} (${feedback.email})</h3>
-                    <p>${feedback.message}</p>
-                    <small>${feedback.date}</small>
-                    <hr>
-                `;
-                messageList.appendChild(messageDiv);
+        // YouTube Audio Player
+        var player;
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('audioPlayer', {
+                height: '0',
+                width: '0',
+                videoId: 'WtToep39d2g',
+                playerVars: {
+                    'autoplay': 1,
+                    'controls': 0,
+                    'showinfo': 0,
+                    'modestbranding': 1,
+                    'loop': 1,
+                    'playlist': 'WtToep39d2g',
+                    'fs': 0,
+                    'cc_load_policy': 0,
+                    'iv_load_policy': 3,
+                    'autohide': 0
+                },
+                events: {
+                    'onReady': onPlayerReady
+                }
             });
         }
 
-     // Admin-Link zum Footer hinzufügen
-var footerLinks = document.querySelector('.footer-links');
-var adminLink = document.createElement('a');
-adminLink.href = '#admin-login';
-adminLink.textContent = 'Admin';
-adminLink.addEventListener('click', function(e) {
-    e.preventDefault();
-    document.getElementById('admin-login').style.display = 'block';
-});
-footerLinks.appendChild(adminLink);
-
-// Encoder-Steuerung
-function startEncoder() {
-    fetch('stream_control.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'action=start'
-    })
-    .then(response => response.text())
-    .then(data => {
-        console.log('Encoder gestartet:', data);
-        alert('Encoder wurde gestartet.');
-    })
-    .catch((error) => {
-        console.error('Fehler beim Starten des Encoders:', error);
-        alert('Fehler beim Starten des Encoders.');
-    });
+        // QR-Code Generator
+function generateQRCode() {
+    var qr = qrcode(0, 'M');
+    qr.addData(window.location.href);
+    qr.make();
+    document.getElementById('qrcode').innerHTML = qr.createImgTag(5);
 }
 
-function stopEncoder() {
-    fetch('stream_control.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'action=stop'
-    })
-    .then(response => response.text())
-    .then(data => {
-        console.log('Encoder gestoppt:', data);
-        alert('Encoder wurde gestoppt.');
-    })
-    .catch((error) => {
-        console.error('Fehler beim Stoppen des Encoders:', error);
-        alert('Fehler beim Stoppen des Encoders.');
-    });
-}
-
-// Event-Listener für Start- und Stop-Buttons
-document.getElementById('start-encoder').addEventListener('click', startEncoder);
-document.getElementById('stop-encoder').addEventListener('click', stopEncoder);
-
-// Smooth Scrolling für Navigation-Links
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function (e) {
-        e.preventDefault();
-
-        document.querySelector(this.getAttribute('href')).scrollIntoView({
-            behavior: 'smooth'
-        });
-    });
-});
-
-// Lazy Loading für Bilder
-document.addEventListener("DOMContentLoaded", function() {
-    var lazyImages = [].slice.call(document.querySelectorAll("img.lazy"));
-
-    if ("IntersectionObserver" in window) {
-        let lazyImageObserver = new IntersectionObserver(function(entries, observer) {
-            entries.forEach(function(entry) {
-                if (entry.isIntersecting) {
-                    let lazyImage = entry.target;
-                    lazyImage.src = lazyImage.dataset.src;
-                    lazyImage.classList.remove("lazy");
-                    lazyImageObserver.unobserve(lazyImage);
-                }
+ 
+        function onPlayerReady(event) {
+            event.target.playVideo();
+            document.getElementById('playButton').addEventListener('click', function() {
+                player.playVideo();
             });
+            document.getElementById('pauseButton').addEventListener('click', function() {
+                player.pauseVideo();
+            });
+        }
+
+        // Initialisierung
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSocialMediaLinks();
+            generateQRCode();
         });
-
-        lazyImages.forEach(function(lazyImage) {
-            lazyImageObserver.observe(lazyImage);
-        });
-    } else {
-        // Fallback für Browser ohne Intersection Observer
-        let active = false;
-
-        const lazyLoad = function() {
-            if (active === false) {
-                active = true;
-
-                setTimeout(function() {
-                    lazyImages.forEach(function(lazyImage) {
-                        if ((lazyImage.getBoundingClientRect().top <= window.innerHeight && lazyImage.getBoundingClientRect().bottom >= 0) && getComputedStyle(lazyImage).display !== "none") {
-                            lazyImage.src = lazyImage.dataset.src;
-                            lazyImage.classList.remove("lazy");
-
-                            lazyImages = lazyImages.filter(function(image) {
-                                return image !== lazyImage;
-                            });
-
-                            if (lazyImages.length === 0) {
-                                document.removeEventListener("scroll", lazyLoad);
-                                window.removeEventListener("resize", lazyLoad);
-                                window.removeEventListener("orientationchange", lazyLoad);
-                            }
-                        }
-                    });
-
-                    active = false;
-                }, 200);
-            }
-        };
-
-        document.addEventListener("scroll", lazyLoad);
-        window.addEventListener("resize", lazyLoad);
-        window.addEventListener("orientationchange", lazyLoad);
-    }
-});
-            </script>
-  </body>
+    </script>
+</body>
 </html>
