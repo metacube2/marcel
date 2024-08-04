@@ -509,6 +509,31 @@ nav ul li a {
     margin-bottom: 20px;
 }
 
+.recommendation-banner {
+    text-align: center;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 20px;
+}
+
+.recommendation-banner h2 {
+    margin-bottom: 10px;
+}
+
+.sponsor-logos {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.sponsor-logos a {
+    margin: 0 10px;
+}
+
+.sponsor-logos img {
+    max-height: 40px;
+    width: auto;
+}
 
 #qrcode {
     display: flex;
@@ -659,6 +684,35 @@ footer {
             </nav>
         </div>
     </header>
+
+
+    <?php
+// Fügen Sie diesen Code direkt nach dem öffnenden <body> Tag ein
+
+echo '<div class="recommendation-banner">
+    <h2>Unsere Empfehlungen</h2>
+    <div class="sponsor-logos">
+        <p> Gartencenter Meier </p>
+        <a href="www.gartencenter-meier.ch" target="_blank">
+     
+            <img src="meier.png" alt="Gartencenter Meier">
+        </a>
+             <p>   Raketen und Vulkane</p>
+        <a href="https://www.rheinmetall.com/de" target="_blank">
+     
+            <img src="bum.png" alt="Lustige Waffen">
+        </a>
+
+    </div>
+</div>';
+?>
+
+
+
+
+
+
+
     <section class="title-section">
     <div class="container">
     <h1>Willkommen bei Aurora Wetter Lifecam</h1>
