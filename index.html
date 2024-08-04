@@ -105,6 +105,17 @@ class GuestbookManager {
         ];
     }
 
+    public function deleteEntry($index) {
+        if (isset($this->entries[$index])) {
+            unset($this->entries[$index]);
+            $this->entries = array_values($this->entries); // Re-index the array
+            $this->saveEntries();
+            return true;
+        }
+        return false;
+    }
+
+
     private function saveEntries() {
         file_put_contents($this->dbFile, json_encode($this->entries));
     }
@@ -120,20 +131,27 @@ class GuestbookManager {
             <button type="submit">Eintrag hinzufügen</button>
         </form>';
     }
-
-    public function displayEntries() {
-        $output = '<div id="guestbook-entries">';
-        foreach ($this->entries as $entry) {
-            $output .= "
-            <div class='guestbook-entry'>
-                <h4>{$entry['name']}</h4>
-                <p>{$entry['message']}</p>
-                <small>{$entry['date']}</small>
-            </div>";
+public function displayEntries($isAdmin = false) {
+    $output = '<div id="guestbook-entries">';
+    foreach ($this->entries as $index => $entry) {
+        $output .= "
+        <div class='guestbook-entry'>
+            <h4><i class='fas fa-user'></i> {$entry['name']}</h4>
+            <p><i class='fas fa-comment'></i> {$entry['message']}</p>
+            <small><i class='fas fa-clock'></i> {$entry['date']}</small>";
+        if ($isAdmin) {
+            $output .= "<form method='post' style='display:inline;'>
+                <input type='hidden' name='delete_entry' value='{$index}'>
+                <button type='submit' class='delete-btn'>Löschen</button>
+            </form>";
         }
-        $output .= '</div>';
-        return $output;
+        $output .= "</div>";
     }
+    $output .= '</div>';
+    return $output;
+}
+
+    
 }
 
 class ContactManager {
@@ -181,8 +199,7 @@ class AdminManager {
         if (!$this->isAdmin()) {
             return false; // Nur Admins dürfen Bilder hochladen
         }
-    
-        // Überprüfen Sie, ob eine Datei hochgeladen wurde
+         
         if (!isset($file['tmp_name']) || empty($file['tmp_name'])) {
             echo "Keine Datei hochgeladen.";
             return false;
@@ -333,6 +350,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $adminManager->handleLogin($_POST['username'], $_POST['password']);
     } elseif (isset($_POST['update-social-media'])) {
         $adminManager->handleSocialMediaUpdate($_POST['social-platform'], $_POST['social-url']);
+
+        if (isset($_POST['delete_entry']) && $adminManager->isAdmin()) {
+            $index = $_POST['delete_entry'];
+            if ($guestbookManager->deleteEntry($index)) {
+                // Optionally set a success message
+                $_SESSION['message'] = "Eintrag erfolgreich gelöscht.";
+            } else {
+                // Optionally set an error message
+                $_SESSION['error'] = "Fehler beim Löschen des Eintrags.";
+            }
+            // Redirect to prevent form resubmission
+            header("Location: " . $_SERVER['PHP_SELF'] . "#guestbook");
+            exit();
+        }
+
     } elseif (isset($_FILES["fileToUpload"]) && $adminManager->isAdmin()) {
         $adminManager->handleImageUpload($_FILES["fileToUpload"]);
 }}
@@ -346,7 +378,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aurora Wetter Lifecam - Einzigartige Live-Webcam und Wetter</title>
+    <title><h2>Aurora Wetter Lifecam - Einzigartige Live-Webcam und Wetter></h2></title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
   body {
@@ -360,6 +393,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     background-position: center;
     background-attachment: fixed;
 }
+
+
+.page-title {
+        font-size: 3rem; /* Dies macht den Titel sehr groß */
+        font-weight: bold;
+        text-align: center;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        color: #333; /* Dunkelgraue Farbe für bessere Lesbarkeit */
+    }
+
+
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -374,7 +419,22 @@ header {
     z-index: 100;
 }
 
+.button {
+    display: inline-block;
+    padding: 10px 20px;
+    margin: 10px;
+    background-color: #4CAF50;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+    font-weight: bold;
+    text-align: center;
+}
 
+.button:hover {
+    background-color: #45a049;
+}
 
 #webcam-player {
     max-width: 100%;
@@ -400,9 +460,29 @@ header {
 }
 
 
+.delete-btn {
+    background-color: #ff4136;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 0.8em;
+    margin-left: 10px;
+}
+
+.delete-btn:hover {
+    background-color: #ff1a1a;
+}
 
 
-
+.title-section {
+        background-image: url('main.jpg');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        padding: 50px 0; /* Anpassen der Polsterung nach Bedarf */
+        color: #fff; /* Textfarbe anpassen, um Lesbarkeit auf dem Hintergrund zu gewährleisten */
+    }
 
 
 .logo img {
@@ -477,14 +557,50 @@ footer {
     text-decoration: none;
     margin: 0 10px;
 }
-#guestbook-entries {
-    max-height: 300px;
-    overflow-y: auto;
-}
+
+
+
+
+
+
+
+
 .guestbook-entry {
-    border-bottom: 1px solid #ddd;
-    padding: 10px 0;
+    background-color: #f9f9f9;
+    border-left: 5px solid #4CAF50;
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
 }
+
+.guestbook-entry:hover {
+    transform: translateY(-5px);
+}
+
+.guestbook-entry h3 {
+    color: #333;
+    margin-top: 0;
+}
+
+.guestbook-entry p {
+    color: #666;
+    line-height: 1.6;
+}
+
+.guestbook-entry .meta {
+    font-size: 0.9em;
+    color: #999;
+    margin-top: 10px;
+}
+
+
+
+
+
+
+
 #social-media-links {
     display: flex;
     justify-content: center;
@@ -543,11 +659,17 @@ footer {
             </nav>
         </div>
     </header>
+    <section class="title-section">
+    <div class="container">
+    <h1>Willkommen bei Aurora Wetter Lifecam</h1>
+    <p>Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!</p>
+    </div>
+</section>
 
 
     <section id="webcams" class="section">
     <div class="container">
-        <h2>Unsere Webcam</h2>
+
         <div class="video-container">
             <?php echo $webcamManager->displayWebcam(); ?>
         </div>
@@ -562,16 +684,13 @@ footer {
 
 
 
-
-
-        <section id="qr-code" class="section">
-        <div class="container">
-            <h2>Folge uns, kopiere den Code und sende es deinen Freunden in Tiktok,Facebook, Instagram usw </h2>
-            <div id="qrcode"></div>
-        </div>
-        </section>
-
-
+<section id="qr-code" class="section">
+    <div class="container" style="text-align: center;">
+        <h1>Folge uns und kopiere den Code und sende es deinen Freunden in Tiktok, Facebook, Instagram usw</h1>
+        <div id="qrcode" data-url="https://your-website.com"></div>
+        <p>Klicke auf den QR-Code, um die URL zu kopieren</p>
+    </div>
+</section>
 
 
 
@@ -580,19 +699,31 @@ footer {
 
 
 
-        <section id="guestbook" class="section">
-            <div class="container">
-                <h2>Gästebuch</h2>
-                <?php 
-                echo $guestbookManager->displayForm();
-                echo $guestbookManager->displayEntries();
-                ?>
-            </div>
-        </section>
+
+
+
+<section id="guestbook" class="section">
+    <div class="container">
+        <h2>Gästebuch</h2>
+        <?php 
+        if (isset($_SESSION['message'])) {
+            echo "<p class='success'>{$_SESSION['message']}</p>";
+            unset($_SESSION['message']);
+        }
+        if (isset($_SESSION['error'])) {
+            echo "<p class='error'>{$_SESSION['error']}</p>";
+            unset($_SESSION['error']);
+        }
+        echo $guestbookManager->displayForm();
+        echo $guestbookManager->displayEntries($adminManager->isAdmin());
+        ?>
+    </div>
+</section>
+
 
         <section id="kontakt" class="section">
             <div class="container">
-                <h2>Kontakt</h2>
+                <h2>Kontakt</h2> <p>Haben Sie Fragen, Anregungen oder möchten uns unterstützen? Wir freuen uns auf Ihre Nachricht!</p>
                 <?php echo $contactManager->displayForm(); ?>
             </div>
         </section>
@@ -606,6 +737,33 @@ footer {
         </div>
             </div>
         </section>
+
+
+
+
+
+        <section id="ueber-uns" class="section">
+            <div class="container">
+                <h2>Über unser Projekt</h2>
+                <div class="about-grid">
+                    <div class="about-item">
+                        <p>Aurora Wetter Lifecam ist ein Herzensprojekt von Wetterbegeisterten. Wir möchten Ihnen die Schönheit der Natur und Faszination des Wetters näher bringen.</p>
+                        <p>Dazu betreiben wir seit 2010 rund um die Uhr hochauflösende Webcams. Besonders stolz sind wir auf einzigartige Einblicke, wie z.B. die Trainingsflüge der Patrouille Suisse jeden Montagmorgen.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+                       
+
+
+
+
+
+
+
+
 
         <?php if ($adminManager->isAdmin()): ?>
         <section id="admin" class="section">
@@ -722,5 +880,22 @@ function generateQRCode() {
             generateQRCode();
         });
     </script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var qrCodeElement = document.getElementById('qrcode');
+    qrCodeElement.addEventListener('click', function() {
+        var url = this.getAttribute('data-url');
+        navigator.clipboard.writeText(url).then(function() {
+            alert('QR-Code-URL wurde in die Zwischenablage kopiert!');
+        }, function(err) {
+            console.error('Fehler beim Kopieren: ', err);
+        });
+    });
+});
+</script>
+
+
 </body>
 </html>
