@@ -123,12 +123,13 @@ class GuestbookManager {
     public function deleteEntry($index) {
         if (isset($this->entries[$index])) {
             unset($this->entries[$index]);
-            $this->entries = array_values($this->entries); // Re-index the array
+            $this->entries = array_values($this->entries); // Re-indizieren des Arrays
             $this->saveEntries();
             return true;
         }
         return false;
     }
+    
 
 
     private function saveEntries() {
@@ -154,13 +155,14 @@ public function displayEntries($isAdmin = false) {
             <h4><i class='fas fa-user'></i> {$entry['name']}</h4>
             <p><i class='fas fa-comment'></i> {$entry['message']}</p>
             <small><i class='fas fa-clock'></i> {$entry['date']}</small>";
-        if ($isAdmin) {
-            $output .= "<form method='post' style='display:inline;'>
-                <input type='hidden' name='delete_entry' value='{$index}'>
-                <button type='submit' class='delete-btn'>Löschen</button>
-            </form>";
-        }
-        $output .= "</div>";
+            if ($isAdmin) {
+                $output .= "<form method='post' style='display:inline;'>
+                    <input type='hidden' name='action' value='delete_guestbook'>
+                    <input type='hidden' name='delete_entry' value='{$index}'>
+                    <button type='submit' class='delete-btn'>Löschen</button>
+                </form>";
+            }
+            
     }
     $output .= '</div>';
     return $output;
@@ -305,14 +307,17 @@ class AdminManager {
         return $output;
     }
     
-     public function displayGalleryImages() {
-        $output = '';
+    public function displayGalleryImages() {
+        $output = '<div id="gallery-images">';
         $files = glob("uploads/*.*");
         foreach($files as $file) {
-            $output .= '<img src="'.$file.'" style="width:200px; height:auto; margin:10px;">';
+            $filename = basename($file);
+            $output .= '<img src="'.$file.'" alt="'.$filename.'" style="width:200px; height:auto; margin:10px; cursor:pointer;">';
         }
+        $output .= '</div>';
         return $output;
     }
+    
  
     
 
@@ -355,6 +360,19 @@ if (isset($_GET['action'])) {
             break;
     }
 }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_guestbook') {
+    if ($adminManager->isAdmin() && isset($_POST['delete_entry'])) {
+        $index = $_POST['delete_entry'];
+        if ($guestbookManager->deleteEntry($index)) {
+            $_SESSION['message'] = "Eintrag erfolgreich gelöscht.";
+        } else {
+            $_SESSION['error'] = "Fehler beim Löschen des Eintrags.";
+        }
+        // Umleitung zur gleichen Seite, um Neuladen des Formulars zu verhindern
+        header("Location: " . $_SERVER['PHP_SELF'] . "#guestbook");
+        exit();
+    }
+}
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -367,19 +385,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['update-social-media'])) {
         $adminManager->handleSocialMediaUpdate($_POST['social-platform'], $_POST['social-url']);
 
-        if (isset($_POST['delete_entry']) && $adminManager->isAdmin()) {
-            $index = $_POST['delete_entry'];
-            if ($guestbookManager->deleteEntry($index)) {
-                // Optionally set a success message
-                $_SESSION['message'] = "Eintrag erfolgreich gelöscht.";
-            } else {
-                // Optionally set an error message
-                $_SESSION['error'] = "Fehler beim Löschen des Eintrags.";
-            }
-            // Redirect to prevent form resubmission
-            header("Location: " . $_SERVER['PHP_SELF'] . "#guestbook");
-            exit();
-        }
 
     } elseif (isset($_FILES["fileToUpload"]) && $adminManager->isAdmin()) {
         $adminManager->handleImageUpload($_FILES["fileToUpload"]);
@@ -741,7 +746,86 @@ footer {
 #currentTime {
     font-family: monospace;
 }
+
+
+
+
+
+
+
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  padding-top: 100px;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0,0,0,0.9);
+}
+
+.modal-content {
+  margin: auto;
+  display: block;
+  width: 80%;
+  max-width: 700px;
+}
+
+#caption {
+  margin: auto;
+  display: block;
+  width: 80%;
+  max-width: 700px;
+  text-align: center;
+  color: #ccc;
+  padding: 10px 0;
+  height: 150px;
+}
+
+.close {
+  position: absolute;
+  top: 15px;
+  right: 35px;
+  color: #f1f1f1;
+  font-size: 40px;
+  font-weight: bold;
+  transition: 0.3s;
+}
+
+.close:hover,
+.close:focus {
+  color: #bbb;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.download-btn {
+  display: block;
+  width: 200px;
+  height: 40px;
+  margin: 10px auto;
+  background-color: #4CAF50;
+  color: white;
+  text-align: center;
+  line-height: 40px;
+  text-decoration: none;
+  border-radius: 5px;
+}
+
+.download-btn:hover {
+  background-color: #45a049;
+}
+
 </style>
+
+
+
+
+
+
+
 
 
 
@@ -750,6 +834,13 @@ footer {
 
 
  
+
+
+
+
+
+
+
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
  
 
@@ -1057,6 +1148,42 @@ function generateQRCode() {
     </script>
 
 
+<script>
+
+document.addEventListener('DOMContentLoaded', function() {
+    var modal = document.getElementById('imageModal');
+    var modalImg = document.getElementById("modalImage");
+    var captionText = document.getElementById("caption");
+    var downloadLink = document.getElementById("downloadLink");
+    var span = document.getElementsByClassName("close")[0];
+
+    // Fügen Sie einen Klick-Event-Listener zu jedem Bild in der Galerie hinzu
+    var images = document.querySelectorAll('#gallery-images img');
+    images.forEach(function(img) {
+        img.onclick = function() {
+            modal.style.display = "block";
+            modalImg.src = this.src;
+            captionText.innerHTML = this.alt;
+            downloadLink.href = this.src;
+            downloadLink.download = this.alt || 'download.jpg';
+        }
+    });
+
+    // Schließen des Modals beim Klick auf (x)
+    span.onclick = function() {
+        modal.style.display = "none";
+    }
+
+    // Schließen des Modals beim Klick außerhalb des Bildes
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+});
+</script>
+
+
 <script>  
 document.addEventListener('DOMContentLoaded', function() {
     var timelapseButton = document.getElementById('timelapse-button');
@@ -1129,6 +1256,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+
+
+<div id="imageModal" class="modal">
+  <span class="close">&times;</span>
+  <img class="modal-content" id="modalImage">
+  <div id="caption"></div>
+  <a id="downloadLink" href="#" download class="download-btn">Download</a>
+</div>
+
+
 
 
 </body>
