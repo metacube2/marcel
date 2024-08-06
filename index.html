@@ -524,28 +524,67 @@ nav ul li a {
     color: #333;
     font-weight: bold;
 }
-.section {
-    padding: 80px 0;
+
+
+
+
+
+.recommendation-section {
     background-color: rgba(255, 255, 255, 0.8);
-    margin-bottom: 20px;
+    padding: 20px 0;
 }
 
 .recommendation-banner {
     text-align: center;
-    padding: 10px;
-    background-color: rgba(255, 255, 255, 0.8);
-    margin-bottom: 20px;
-}
-
-.recommendation-banner h2 {
-    margin-bottom: 10px;
 }
 
 .sponsor-logos {
     display: flex;
     justify-content: center;
     align-items: center;
+    flex-wrap: wrap;
 }
+
+.ad-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+.ad-item {
+    margin: 0 10px;
+}
+
+.ad-item img {
+    max-height: 40px;
+    width: auto;
+}
+
+@media (max-width: 768px) {
+    #welcome-title {
+        font-size: 28px;
+    }
+
+    #welcome-subtitle {
+        font-size: 18px;
+    }
+
+    .ad-item img {
+        max-height: 30px;
+    }
+}
+
+.section {
+    padding: 80px 0;
+    background-color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 20px;
+} 
+
+.recommendation-banner h2 {
+    margin-bottom: 10px;
+    color: #333; /* Hinzugefügt, um sicherzustellen, dass der Text sichtbar ist */
+}
+ 
 
 .sponsor-logos a {
     margin: 0 10px;
@@ -555,6 +594,15 @@ nav ul li a {
     max-height: 40px;
     width: auto;
 }
+
+.banner-container {
+    position: absolute;
+    bottom: 20px; /* Anpassen Sie diesen Wert, um die vertikale Position zu ändern */
+    left: 0;
+    right: 0;
+    z-index: 20;
+}
+
 
 #qrcode {
     display: flex;
@@ -707,26 +755,108 @@ footer {
 }
 
 
-     #welcome-message {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        text-align: center;
-        font-size: 24px;
-        font-weight: bold;
-        color: #ffffff; /* Weiße Schriftfarbe, passen Sie diese nach Bedarf an */
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.5); /* Optionaler Schatteneffekt für bessere Lesbarkeit */
-        z-index: 1000; /* Stellt sicher, dass der Text über anderen Elementen angezeigt wird */
+
+
+
+.title-section {
+    position: absolute;
+    top: 10%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: 100%;
+    z-index: 1220;
+}
+
+.container {
+    max-width: 80%;
+    margin: 0 auto;
+}
+
+
+#welcome-title {
+    font-size: 36px;
+    font-weight: bold;
+    color: #ffffff;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+    margin-bottom: 20px;
+}
+
+#welcome-subtitle {
+    font-size: 24px;
+    color: #ffffff;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+}
+
+
+.banner-container {
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    z-index: 20;
+}
+
+.recommendation-banner {
+    text-align: center;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 20px;
+}
+
+.recommendation-banner h2 {
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.sponsor-logos {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.ad-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+.ad-item {
+    margin: 0 10px;
+}
+
+.ad-item img {
+    max-height: 40px;
+    width: auto;
+}
+
+@media (max-width: 768px) {
+    .title-section {
+        position: static;
+        transform: none;
+        margin-top: 20px;
     }
 
-    /* Optional: Responsive Design für kleinere Bildschirme */
-    @media (max-width: 768px) {
-        #welcome-message {
-            font-size: 18px;
-        }
+    .banner-container {
+        position: static;
+        margin-top: 20px;
     }
- 
+
+    #welcome-title {
+        font-size: 28px;
+    }
+
+    #welcome-subtitle {
+        font-size: 18px;
+    }
+
+    .ad-item img {
+        max-height: 30px;
+    }
+}
+
+
 
 
 
@@ -835,6 +965,37 @@ footer {
 .download-btn:hover {
   background-color: #45a049;
 }
+.main-content {
+    position: relative;
+    min-height: 100vh;
+}
+
+.title-section {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: 100%;
+    z-index: 10;
+}
+
+.banner-container {
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    z-index: 20;
+}
+
+.recommendation-banner {
+    text-align: center;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 20px;
+}
+
+/* Rest des CSS bleibt unverändert */
 
 </style>
 
@@ -891,56 +1052,53 @@ footer {
     </header>
 
 
-    <?php
-
-echo '<div class="recommendation-banner">
-    <h2>Unsere Empfehlungen</h2>
-    <div class="sponsor-logos">';
- 
-$advertisements = [
-    ['name' => 'Gartencenter Meier', 'url' => 'https://www.gartencenter-meier.ch', 'img' => 'meier.png'],
-    ['name' => 'Restaurant Schweizerhof', 'url' => 'https://schweizerhof-duernten.ch/', 'img' => 'schweiz.png'],
-    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png']
-];
-
-//  Werbungen in 5er-Gruppen
-$grouped_ads = array_chunk($advertisements, 5);
-
-foreach ($grouped_ads as $group) {
-    echo '<div class="ad-row">';
-    foreach ($group as $ad) {
-        echo '<div class="ad-item">
-            <p>' . $ad['name'] . '</p>
-            <a href="' . $ad['url'] . '" target="_blank">
-                <img src="' . $ad['img'] . '" alt="' . $ad['name'] . '">
-            </a>
-        </div>';
-    }
-    echo '</div>';
-}
-
-echo '</div></div>';
-
-?>
 
 
-
-
-
-
-
+    <div class="main-content">
     <section class="title-section">
-    <div class="container">
-    <div id="welcome-message">Willkommen bei Aurora Wetter Lifecam</div>
+        <div class="container">
+            <div id="welcome-title">Willkommen bei Aurora Wetter Lifecam</div>
+            <div id="welcome-subtitle">Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!</div>
+        </div>
+    </section>
 
-    <div id="welcome-message">Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!</div>
+    <div class="banner-container">
+        <div class="recommendation-banner">
+            <h2>Unsere Empfehlungen</h2>
+            <div class="sponsor-logos">
+                <?php
+                $advertisements = [
+                    ['name' => 'Gartencenter Meier', 'url' => 'https://www.gartencenter-meier.ch', 'img' => 'meier.png'],
+                    ['name' => 'Restaurant Schweizerhof', 'url' => 'https://schweizerhof-duernten.ch/', 'img' => 'schweiz.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png']
+                ];
+
+                $grouped_ads = array_chunk($advertisements, 5);
+
+                foreach ($grouped_ads as $group) {
+                    echo '<div class="ad-row">';
+                    foreach ($group as $ad) {
+                        echo '<div class="ad-item">
+                            <a href="' . $ad['url'] . '" target="_blank">
+                                <img src="' . $ad['img'] . '" alt="' . $ad['name'] . '">
+                            </a>
+                        </div>';
+                    }
+                    echo '</div>';
+                }
+                ?>
+            </div>
+        </div>
     </div>
-</section>
+</div>
+
+
+
 
 
     <section id="webcams" class="section">
