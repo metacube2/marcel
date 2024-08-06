@@ -707,12 +707,30 @@ footer {
 }
 
 
+     #welcome-message {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        font-size: 24px;
+        font-weight: bold;
+        color: #ffffff; /* Weiße Schriftfarbe, passen Sie diese nach Bedarf an */
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.5); /* Optionaler Schatteneffekt für bessere Lesbarkeit */
+        z-index: 1000; /* Stellt sicher, dass der Text über anderen Elementen angezeigt wird */
+    }
+
+    /* Optional: Responsive Design für kleinere Bildschirme */
+    @media (max-width: 768px) {
+        #welcome-message {
+            font-size: 18px;
+        }
+    }
+ 
 
 
 
-
-
-<style>
+ 
 .timelapse-container {
     width: 100%;
     max-width: 800px;
@@ -918,8 +936,9 @@ echo '</div></div>';
 
     <section class="title-section">
     <div class="container">
-    <h1>Willkommen bei Aurora Wetter Lifecam</h1>
-    <p>Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!</p>
+    <div id="welcome-message">Willkommen bei Aurora Wetter Lifecam</div>
+
+    <div id="welcome-message">Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!</div>
     </div>
 </section>
 
