@@ -3,7 +3,7 @@
 # Konfiguration
 output_dir="./image"
 rtsp_url="rtsp://admin:Kk@619477@mkesslerg.duckdns.org:88/videoMain"
-interval=222 # 10 Minuten in Sekunden
+interval=60 # 10 Minuten in Sekunden
 
 # Erstelle das Ausgabeverzeichnis, falls es nicht existiert
 mkdir -p "$output_dir"
@@ -42,4 +42,5 @@ echo "Starte Screenshot-Aufnahme..."
 echo "Bilder werden in $output_dir gespeichert"
 take_screenshot
    delete_old_images
+     sleep $interval
    done
