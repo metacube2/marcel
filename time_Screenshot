@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Konfiguration
+output_dir="./image"
+rtsp_url="rtsp://admin:Kk@619477@mkesslerg.duckdns.org:88/videoMain"
+interval=3600  # 1 Stunde in Sekunden
+
+# Erstelle das Ausgabeverzeichnis, falls es nicht existiert
+mkdir -p "$output_dir"
+
+# Funktion zum Erstellen eines Screenshots
+take_screenshot() {
+    local timestamp=$(date +"%Y%m%d_%H%M%S")
+    ffmpeg -y -i "$rtsp_url" -vframes 1 "$output_dir/screenshot_$timestamp.jpg" 2>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        echo "Screenshot erstellt: $output_dir/screenshot_$timestamp.jpg"
+    else
+        echo "Fehler beim Erstellen des Screenshots"
+    fi
+}
+
+# Hauptschleife
+echo "Starte stündliche Screenshot-Aufnahme..."
+echo "Bilder werden in $output_dir gespeichert"
+while true; do
+    take_screenshot
+    sleep $interval
+done
