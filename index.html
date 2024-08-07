@@ -416,6 +416,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 
+
 .page-title {
         font-size: 3rem; /* Dies macht den Titel sehr groß */
         font-weight: bold;
@@ -456,29 +457,23 @@ header {
 .button:hover {
     background-color: #45a049;
 }
-
 #webcam-player {
     max-width: 100%;
     height: auto;
     max-height: 70vh; /* Begrenzt die Höhe auf 70% der Bildschirmhöhe */
     display: block;
-    margin: 0 auto;
+    margin: 702px auto 0; /* Fügt einen oberen Abstand von 20px hinzu */
 }
 
 .video-container {
-    position: relative;
-    padding-bottom: 56.25%; /* 16:9 Seitenverhältnis */
-    height: 0;
-    overflow: hidden;
+    margin-top: 20px; /* Fügt einen oberen Abstand von 20px hinzu */
 }
 
 .video-container #webcam-player {
-    position: absolute;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
 }
+
 
 
 .delete-btn {
@@ -996,18 +991,223 @@ footer {
 }
 
 /* Rest des CSS bleibt unverändert */
+						  
+   
+						   
+			  
+			   
+ 
 
 </style>
+								   
+					 
+				
+									  
+						   
+								
+								 
+ 
+
+			
+					  
+				   
+					
+ 
+
+						   
+		
+											   
+					
+											 
+					 
+		   
+				 
+ 
+
+				 
+			   
+					  
+				  
+						   
+								   
+ 
+
+				
+					   
+					
+											   
+ 
+
+				
+					
+					  
+				
+						
+ 
+
+				   
+					
+				
+ 
+
+					
+				  
+					   
+						   
+			  
+					 
+						
+ 
+
+								 
+					   
+		   
+			
+				
+				 
+ 
+
+					   
+						
+					   
+				  
+											   
+						
+ 
+
+					   
+						   
+					
+						
+	 
+
+					
+						
+	 
+
+					   
+						
+	 
+ 
 
 
 
+		   
+   
+			  
+			   
+						   
+ 
+
+	  
+								   
+					 
+				
+									  
+						   
+								
+								 
+											  
+ 
+
+			
+					  
+				   
+				  
+ 
+
+			
+		
+											   
+					
+											 
+					
+		   
+			
+			 
+												   
+				  
+ 
+
+				 
+			   
+				  
+						   
+												   
+																  
+ 
+
+				   
+				
+					   
+					
+											   
+ 
+
+				
+					
+					  
+				   
+			 
+											 
+						
+ 
+
+				   
+					
+				   
+											 
+ 
+
+					 
+				  
+					   
+												   
+			  
+					 
+ 
+
+								 
+					   
+			 
+			
+				
+				 
+ 
+
+					   
+						
+					   
+				  
+											   
+ 
+
+					   
+						   
+		  
+																				 
+	 
+
+			
+					 
+	 
+
+					
+						
+	 
+
+					
+						
+	 
+
+					   
+						
+	 
+ 
 
 
-
-
-
-
-
+		
+ 
 
     </style>
 
@@ -1058,44 +1258,51 @@ footer {
     <section class="title-section">
         <div class="container">
             <div id="welcome-title">Willkommen bei Aurora Wetter Lifecam</div>
-            <div id="welcome-subtitle">Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!</div>
+            <div id="welcome-subtitle">Erleben Sie faszinierende Ausblicke der Zürcher Region - in Echtzeit!</div>
         </div>
     </section>
 
     <div class="banner-container">
-        <div class="recommendation-banner">
-            <h2>Unsere Empfehlungen</h2>
-            <div class="sponsor-logos">
-                <?php
-                $advertisements = [
-                    ['name' => 'Gartencenter Meier', 'url' => 'https://www.gartencenter-meier.ch', 'img' => 'meier.png'],
-                    ['name' => 'Restaurant Schweizerhof', 'url' => 'https://schweizerhof-duernten.ch/', 'img' => 'schweiz.png'],
-                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
-                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png']
-                ];
+    <div class="recommendation-banner">
+        <h2>Unsere Empfehlungen</h2>
+        <div class="sponsor-logos">
+            <?php
+            $advertisements = [
+                ['name' => 'Gartencenter Meier', 'url' => 'https://www.gartencenter-meier.ch', 'img' => 'meier.png', 'text' => 'Gartencenter Meier'],
+                ['name' => 'Restaurant Schweizerhof', 'url' => 'https://schweizerhof-duernten.ch/', 'img' => 'schweiz.png', 'text' => 'Hotel Schweizerhof'],
+                ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png', 'text' => 'Werben Sie hier'],
+                
+                ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png', 'text' => 'Werben Sie hier'],
+                ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png', 'text' => 'Werben Sie hier'],
+                ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png', 'text' => 'Werben Sie hier'],
+                 
+                
+                // Fügen Sie hier weitere Werbeanzeigen hinzu
+            ];
 
-                $grouped_ads = array_chunk($advertisements, 5);
+            $grouped_ads = array_chunk($advertisements, 3);
 
-                foreach ($grouped_ads as $group) {
-                    echo '<div class="ad-row">';
-                    foreach ($group as $ad) {
-                        echo '<div class="ad-item">
-                            <a href="' . $ad['url'] . '" target="_blank">
-                                <img src="' . $ad['img'] . '" alt="' . $ad['name'] . '">
-                            </a>
-                        </div>';
-                    }
-                    echo '</div>';
+            foreach ($grouped_ads as $group) {
+                echo '<div class="ad-row">';
+                foreach ($group as $ad) {
+                    echo '<div class="ad-item">
+                        <a href="' . htmlspecialchars($ad['url']) . '" target="_blank">
+                            <img src="' . htmlspecialchars($ad['img']) . '" alt="' . htmlspecialchars($ad['name']) . '">
+                            <p>' . htmlspecialchars($ad['text']) . '</p>
+                        </a>
+								
+					 
+                    </div>';
                 }
-                ?>
-            </div>
+				  
+                echo '</div>';
+            }
+            ?>
         </div>
     </div>
 </div>
+
+
 
 
 
@@ -1106,9 +1313,17 @@ footer {
 
     <div class="video-container">
     <?php echo $webcamManager->displayWebcam(); ?>
-    <div id="timelapse-viewer" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-        <img id="timelapse-image" src="" alt="Timelapse Image" style="width: 100%; height: 100%; object-fit: cover;">
+    <div id="timelapse-viewer" class="video-container"  style="  margin-top: 300px;   max-width: 100%;
+    height: auto;
+    max-height: 70vh;">
+        <img id="timelapse-image" src="" alt="Timelapse Image" class="video-container" style="  margin-top: 500px; max-width: 100%;
+    height: auto;
+    max-height: 70vh;">>
     </div>
+
+ 
+
+
 </div>
 <div class="webcam-controls">
     <a href="?action=snapshot" class="button">Snapshot speichern</a>
@@ -1409,8 +1624,10 @@ document.addEventListener('DOMContentLoaded', function() {
             sunnyTimelapseButton.textContent = 'Nur sonnige Bilder zeigen';
         }
     }
+ const imageCache = new Map();
+const preloadBuffer = 5; // Anzahl der im Voraus zu ladenden Bilder
 
-    async function startTimelapse() {
+async function startTimelapse() {
     if (imageFiles.length === 0) {
         console.log("Keine Bilder gefunden");
         return;
@@ -1418,10 +1635,26 @@ document.addEventListener('DOMContentLoaded', function() {
     
     timelapseInterval = setInterval(async function() {
         while (currentImageIndex < imageFiles.length) {
-            const imageData = await getImageData(imageFiles[currentImageIndex]);
+            const currentImage = imageFiles[currentImageIndex];
+            
+            // Lazy Loading: Lade das aktuelle Bild und die nächsten paar
+            for (let i = currentImageIndex; i < currentImageIndex + preloadBuffer && i < imageFiles.length; i++) {
+                if (!imageCache.has(imageFiles[i])) {
+                    imageCache.set(imageFiles[i], getImageData(imageFiles[i]));
+                }
+            }
+            
+            const imageData = await imageCache.get(currentImage);
             if (!isGreyImage(imageData) && (!showOnlySunny || isSunnyImage(imageData))) {
-                timelapseImage.src = imageFiles[currentImageIndex];
+                timelapseImage.src = currentImage;
                 currentImageIndex++;
+                
+                // Cache-Bereinigung: Entferne alte Bilder aus dem Cache
+                if (imageCache.size > preloadBuffer * 2) {
+                    const keysToDelete = Array.from(imageCache.keys()).slice(0, imageCache.size - preloadBuffer);
+                    keysToDelete.forEach(key => imageCache.delete(key));
+                }
+                
                 return;
             }
             currentImageIndex++;
@@ -1429,23 +1662,40 @@ document.addEventListener('DOMContentLoaded', function() {
         currentImageIndex = 0; // Zurück zum Anfang, wenn alle Bilder durchlaufen wurden
     }, 500);
 }
+function updateTimelapseImage() {
+    timelapseImage.src = imageFiles[currentImageIndex];
+    timelapseSlider.value = currentImageIndex;
+    updateTimeDisplay();
+}
 
+function updateTimeDisplay() {
+    var date = new Date(imageFiles[currentImageIndex].match(/(\d{8}_\d{6})/)[1].replace(/_/g, 'T'));
+    timelapseTime.textContent = date.toLocaleString();
+}
+// Modifizierte getImageData-Funktion für Caching
 function getImageData(src) {
     return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.onload = function() {
-            const canvas = document.createElement('canvas');
-            canvas.width = this.width;
-            canvas.height = this.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(this, 0, 0);
-            resolve(ctx.getImageData(0, 0, this.width, this.height));
-        };
-        img.onerror = reject;
-        img.src = src;
+        if (imageCache.has(src)) {
+            resolve(imageCache.get(src));
+        } else {
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                canvas.width = this.width;
+                canvas.height = this.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(this, 0, 0);
+                const imageData = ctx.getImageData(0, 0, this.width, this.height);
+                imageCache.set(src, imageData);
+                resolve(imageData);
+            };
+            img.onerror = reject;
+            img.src = src;
+        }
     });
 }
+
 
 
     function stopTimelapse() {
