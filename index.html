@@ -495,7 +495,7 @@ header {
     background-color: #ff1a1a;
 }
 
-
+ 
 .title-section {
         background-image: url('main.jpg');
         background-size: cover;
@@ -1111,9 +1111,11 @@ footer {
     </div>
 </div>
 <div class="webcam-controls">
-    <a href="?action=snapshot" class="button">Snapshot herunterladen</a>
-    <a href="?action=sequence" class="button">Video-Sequenz herunterladen</a>
-    <a href="#" class="button" id="timelapse-button">Tageszeitraffer anzeigen</a>
+    <a href="?action=snapshot" class="button">Snapshot speichern</a>
+    <a href="?action=sequence" class="button">Videoclip speichern</a>
+    <a href="#" class="button" id="timelapse-button">Tagesablauf im Zeitraffer</a>
+    <a href="#" class="button" id="sunny-timelapse-button">Sonnige Momente anzeigen</a>
+
 </div>
 
 
@@ -1361,9 +1363,17 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 
-<script>  
+
+ 
+
+
+
+
+
+<script> 
 document.addEventListener('DOMContentLoaded', function() {
     var timelapseButton = document.getElementById('timelapse-button');
+    var sunnyTimelapseButton = document.getElementById('sunny-timelapse-button');
     var timelapseViewer = document.getElementById('timelapse-viewer');
     var timelapseImage = document.getElementById('timelapse-image');
     var webcamPlayer = document.getElementById('webcam-player');
@@ -1371,48 +1381,142 @@ document.addEventListener('DOMContentLoaded', function() {
     var imageFiles = <?php echo $imageFilesJson; ?>;
     var currentImageIndex = 0;
     var timelapseInterval;
+    var showOnlySunny = false;
 
     timelapseButton.addEventListener('click', function(e) {
         e.preventDefault();
+        toggleTimelapse(false);
+    });
+
+    sunnyTimelapseButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        toggleTimelapse(true);
+    });
+
+    function toggleTimelapse(onlySunny) {
         if (timelapseViewer.style.display === 'none') {
             timelapseViewer.style.display = 'block';
             webcamPlayer.style.display = 'none';
+            showOnlySunny = onlySunny;
             startTimelapse();
             timelapseButton.textContent = 'Zurück zur Live-Webcam';
+            sunnyTimelapseButton.textContent = 'Zurück zur Live-Webcam';
         } else {
             stopTimelapse();
             timelapseViewer.style.display = 'none';
             webcamPlayer.style.display = 'block';
             timelapseButton.textContent = 'Tageszeitraffer anzeigen';
+            sunnyTimelapseButton.textContent = 'Nur sonnige Bilder zeigen';
         }
-    });
-
-
-
-    
-
-    function startTimelapse() {
-        if (imageFiles.length === 0) {
-            console.log("Keine Bilder gefunden");
-            return;
-        }
-        
-        timelapseInterval = setInterval(function() {
-            if (currentImageIndex >= imageFiles.length) {
-                currentImageIndex = 0;
-            }
-            // Hier verwenden wir direkt den Pfad aus dem imageFiles-Array
-            timelapseImage.src = imageFiles[currentImageIndex];
-            currentImageIndex++;
-        }, 500); // Jedes Bild wird eine halbe Sekunde angezeigt
     }
+
+    async function startTimelapse() {
+    if (imageFiles.length === 0) {
+        console.log("Keine Bilder gefunden");
+        return;
+    }
+    
+    timelapseInterval = setInterval(async function() {
+        while (currentImageIndex < imageFiles.length) {
+            const imageData = await getImageData(imageFiles[currentImageIndex]);
+            if (!isGreyImage(imageData) && (!showOnlySunny || isSunnyImage(imageData))) {
+                timelapseImage.src = imageFiles[currentImageIndex];
+                currentImageIndex++;
+                return;
+            }
+            currentImageIndex++;
+        }
+        currentImageIndex = 0; // Zurück zum Anfang, wenn alle Bilder durchlaufen wurden
+    }, 500);
+}
+
+function getImageData(src) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            canvas.width = this.width;
+            canvas.height = this.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(this, 0, 0);
+            resolve(ctx.getImageData(0, 0, this.width, this.height));
+        };
+        img.onerror = reject;
+        img.src = src;
+    });
+}
+
 
     function stopTimelapse() {
         clearInterval(timelapseInterval);
         currentImageIndex = 0;
     }
-});
  
+    function isGreyImage(imageData) {
+    const data = imageData.data;
+    const tolerance = 10; // Toleranzwert für Farbunterschiede
+    const sampleSize = Math.min(data.length / 4, 1000); // Begrenzen Sie die Anzahl der zu prüfenden Pixel
+
+    for (let i = 0; i < sampleSize; i++) {
+        const index = i * 4;
+        const r = data[index];
+        const g = data[index + 1];
+        const b = data[index + 2];
+
+        // Prüfen Sie, ob die Farbwerte innerhalb der Toleranz liegen
+        if (Math.abs(r - g) > tolerance || Math.abs(r - b) > tolerance || Math.abs(g - b) > tolerance) {
+            return false; // Das Bild ist nicht grau
+        }
+    }
+    return true; // Das Bild ist grau
+}
+
+function isSunnyImage(imageData) {
+    const data = imageData.data;
+    const width = imageData.width;
+    const height = imageData.height;
+    
+    // Nur den oberen Drittel des Bildes analysieren
+    const searchHeight = Math.floor(height / 3);
+    
+    // Schwellenwerte für gelbe Farbe
+    const yellowThreshold = {
+        red: 200,
+        green: 200,
+        blue: 50
+    };
+    
+    // Mindestgröße für die Sonne (in Pixeln)
+    const minSunSize = 20;
+    
+    let sunPixels = 0;
+    
+    for (let y = 0; y < searchHeight; y++) {
+        for (let x = 0; x < width; x++) {
+            const index = (y * width + x) * 4;
+            const r = data[index];
+            const g = data[index + 1];
+            const b = data[index + 2];
+            
+            // Prüfen, ob der Pixel gelb ist
+            if (r > yellowThreshold.red && g > yellowThreshold.green && b < yellowThreshold.blue) {
+                sunPixels++;
+            }
+        }
+    }
+    
+    // Als sonnig betrachten, wenn genügend gelbe Pixel gefunden wurden
+    return sunPixels > minSunSize * minSunSize;
+}
+
+
+
+
+});
+
+
+    
 
 
 
