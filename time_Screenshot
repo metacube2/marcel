@@ -3,7 +3,7 @@
 # Konfiguration
 output_dir="./image"
 rtsp_url="rtsp://admin:Kk@619477@mkesslerg.duckdns.org:88/videoMain"
-interval=3600  # 1 Stunde in Sekunden
+interval=222 # 10 Minuten in Sekunden
 
 # Erstelle das Ausgabeverzeichnis, falls es nicht existiert
 mkdir -p "$output_dir"
@@ -11,19 +11,35 @@ mkdir -p "$output_dir"
 # Funktion zum Erstellen eines Screenshots
 take_screenshot() {
     local timestamp=$(date +"%Y%m%d_%H%M%S")
-    ffmpeg -y -i "$rtsp_url" -vframes 1 "$output_dir/screenshot_$timestamp.jpg" 2>/dev/null
+    local output_file="$output_dir/screenshot_$timestamp.jpg"
+    local log_file="$output_dir/ffmpeg_log_$timestamp.txt"
     
-    if [ $? -eq 0 ]; then
-        echo "Screenshot erstellt: $output_dir/screenshot_$timestamp.jpg"
+    echo "Versuche Screenshot zu erstellen..."
+    echo "Befehl: ffmpeg -i $rtsp_url -vframes 1 -q:v 2 $output_file"
+    
+    ffmpeg -i "$rtsp_url" -vframes 1 -q:v 2 -ss 00:00:01 "$output_file"
+
+    
+    if [ -f "$output_file" ]; then
+        echo "Screenshot erstellt: $output_file"
+        echo "FFmpeg Log:"
+        cat "$log_file"
     else
-        echo "Fehler beim Erstellen des Screenshots"
+        echo "Fehler beim Erstellen des Screenshots."
+        echo "FFmpeg Log:"
+        cat "$log_file"
     fi
+}
+# Funktion zum Löschen alter Bilder
+delete_old_images() {
+    find "$output_dir" -type f -name "screenshot_*.jpg" -mmin +1440 -delete
+    echo "Bilder älter als 24 Stunden wurden gelöscht."
 }
 
 # Hauptschleife
-echo "Starte stündliche Screenshot-Aufnahme..."
-echo "Bilder werden in $output_dir gespeichert"
 while true; do
-    take_screenshot
-    sleep $interval
-done
+echo "Starte Screenshot-Aufnahme..."
+echo "Bilder werden in $output_dir gespeichert"
+take_screenshot
+   delete_old_images
+   done
