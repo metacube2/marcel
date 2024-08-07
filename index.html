@@ -501,8 +501,8 @@ header {
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
-        padding: 50px 0; /* Anpassen der Polsterung nach Bedarf */
-        color: #fff; /* Textfarbe anpassen, um Lesbarkeit auf dem Hintergrund zu gewährleisten */
+        padding: 50px 0;  
+        color: #fff;  
     }
 
 
@@ -966,7 +966,7 @@ footer {
   background-color: #45a049;
 }
 .main-content {
-    position: relative;
+    position: 2px;
     min-height: 100vh;
 }
 
@@ -1455,8 +1455,8 @@ function getImageData(src) {
  
     function isGreyImage(imageData) {
     const data = imageData.data;
-    const tolerance = 10; // Toleranzwert für Farbunterschiede
-    const sampleSize = Math.min(data.length / 4, 1000); // Begrenzen Sie die Anzahl der zu prüfenden Pixel
+    const tolerance = 10;  
+    const sampleSize = Math.min(data.length / 4, 1000); //  Deine Grossmutter
 
     for (let i = 0; i < sampleSize; i++) {
         const index = i * 4;
@@ -1464,12 +1464,12 @@ function getImageData(src) {
         const g = data[index + 1];
         const b = data[index + 2];
 
-        // Prüfen Sie, ob die Farbwerte innerhalb der Toleranz liegen
+        // Prüfen Sie, ob die Farbwerte innerhalb der Toleranz liegen ->  wers glaubt !
         if (Math.abs(r - g) > tolerance || Math.abs(r - b) > tolerance || Math.abs(g - b) > tolerance) {
             return false; // Das Bild ist nicht grau
         }
     }
-    return true; // Das Bild ist grau
+    return true; // Das Bild ist grau, aber natürlich :)
 }
 
 function isSunnyImage(imageData) {
@@ -1477,10 +1477,10 @@ function isSunnyImage(imageData) {
     const width = imageData.width;
     const height = imageData.height;
     
-    // Nur den oberen Drittel des Bildes analysieren
+    // Nur den oberen Drittel des Bildes analysieren 
     const searchHeight = Math.floor(height / 3);
     
-    // Schwellenwerte für gelbe Farbe
+    // Gopfertamsiech namal !!!!!
     const yellowThreshold = {
         red: 200,
         green: 200,
