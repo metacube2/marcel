@@ -2,25 +2,25 @@
 session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-
-
- 
 $imageDir = "./image"; // Angepasst an das Ausgabeverzeichnis des Bash-Skripts
 $imageFiles = glob("$imageDir/screenshot_*.jpg");
 rsort($imageFiles); // Sortiert die Dateien in umgekehrter Reihenfolge (neueste zuerst)
 $imageFilesJson = json_encode($imageFiles);
  
-
-
-
-
 class WebcamManager {
+
     private $videoSrc = 'test_video.m3u8';
     private $logoPath = 'logo.png';
+
     public function displayWebcam() {
         return '<video id="webcam-player" controls autoplay muted></video>';
+	  
+				 
     }
+	
+	
     public function captureSnapshot() {
+									
         $outputFile = 'snapshot_' . date('YmdHis') . '.jpg';
         $command = "ffmpeg -i {$this->videoSrc} -i {$this->logoPath} -filter_complex 'overlay=10:10' -vframes 1 -q:v 2 {$outputFile}";
         
@@ -29,6 +29,22 @@ class WebcamManager {
         if ($returnVar !== 0) {
             return "Fehler beim Erstellen des Snapshots.";
         }
+
+		// Kopieren des Snapshots in den Uploads-Ordner
+        $uploadDir = "uploads/";
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        
+        }
+    
+        $uploadFile = $uploadDir . $outputFile;
+        if (copy($outputFile, $uploadFile)) {
+            
+        } else {
+            
+        }				  
+							   
+		 
 
         header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="' . $outputFile . '"');
@@ -51,21 +67,28 @@ class WebcamManager {
             return "Fehler beim Erstellen der Video-Sequenz.";
         }
 
+						  // Kopieren des Videoclips in den Uploads-Ordner
+    $uploadDir = "uploads/";
+    if (!file_exists($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+        echo "Uploads-Ordner erstellt.<br>";
+    }
+
+    $uploadFile = $uploadDir . $outputFile;
+    if (copy($outputFile, $uploadFile)) {
+      
+    } else {
+        echo "Fehler beim Kopieren des Videoclips in den Uploads-Ordner.<br>";
+    }
+							   
+		 
+
         header('Content-Type: video/mp4');
         header('Content-Disposition: attachment; filename="' . $outputFile . '"');
         readfile($outputFile);
         unlink($outputFile);
         exit;
     }
-
-
-
-
-
-
-
-
-    
 
     public function getJavaScript() {
         return "
@@ -317,26 +340,6 @@ class AdminManager {
         $output .= '</div>';
         return $output;
     }
-    
- 
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
     public function handleSocialMediaUpdate($platform, $url) {
         $socialLinks = json_decode(file_get_contents('social_links.json') ?: '{}', true);
         $socialLinks[$platform] = $url;
@@ -354,12 +357,18 @@ if (isset($_GET['action'])) {
     switch ($_GET['action']) {
         case 'snapshot':
             $webcamManager->captureSnapshot();
+																		
             break;
         case 'sequence':
             $webcamManager->captureVideoSequence();
+																		
             break;
+																							 
     }
+		 
 }
+
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_guestbook') {
     if ($adminManager->isAdmin() && isset($_POST['delete_entry'])) {
         $index = $_POST['delete_entry'];
@@ -457,23 +466,29 @@ header {
 .button:hover {
     background-color: #45a049;
 }
+
 #webcam-player {
     max-width: 100%;
     height: auto;
     max-height: 70vh; /* Begrenzt die Höhe auf 70% der Bildschirmhöhe */
     display: block;
-    margin: 702px auto 0; /* Fügt einen oberen Abstand von 20px hinzu */
+    margin: 0 auto;
 }
 
 .video-container {
-    margin-top: 20px; /* Fügt einen oberen Abstand von 20px hinzu */
+    position: relative;
+    padding-bottom: 56.25%; /* 16:9 Seitenverhältnis */
+    height: 0;
+    overflow: hidden;
 }
 
 .video-container #webcam-player {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
 }
-
 
 
 .delete-btn {
@@ -496,8 +511,8 @@ header {
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
-        padding: 50px 0;  
-        color: #fff;  
+        padding: 50px 0; /* Anpassen der Polsterung nach Bedarf */
+        color: #fff; /* Textfarbe anpassen, um Lesbarkeit auf dem Hintergrund zu gewährleisten */
     }
 
 
@@ -961,7 +976,7 @@ footer {
   background-color: #45a049;
 }
 .main-content {
-    position: 2px;
+    position: relative;
     min-height: 100vh;
 }
 
@@ -999,234 +1014,8 @@ footer {
  
 
 </style>
-								   
-					 
-				
-									  
-						   
-								
-								 
- 
-
-			
-					  
-				   
-					
- 
-
-						   
-		
-											   
-					
-											 
-					 
-		   
-				 
- 
-
-				 
-			   
-					  
-				  
-						   
-								   
- 
-
-				
-					   
-					
-											   
- 
-
-				
-					
-					  
-				
-						
- 
-
-				   
-					
-				
- 
-
-					
-				  
-					   
-						   
-			  
-					 
-						
- 
-
-								 
-					   
-		   
-			
-				
-				 
- 
-
-					   
-						
-					   
-				  
-											   
-						
- 
-
-					   
-						   
-					
-						
-	 
-
-					
-						
-	 
-
-					   
-						
-	 
- 
-
-
-
-		   
-   
-			  
-			   
-						   
- 
-
-	  
-								   
-					 
-				
-									  
-						   
-								
-								 
-											  
- 
-
-			
-					  
-				   
-				  
- 
-
-			
-		
-											   
-					
-											 
-					
-		   
-			
-			 
-												   
-				  
- 
-
-				 
-			   
-				  
-						   
-												   
-																  
- 
-
-				   
-				
-					   
-					
-											   
- 
-
-				
-					
-					  
-				   
-			 
-											 
-						
- 
-
-				   
-					
-				   
-											 
- 
-
-					 
-				  
-					   
-												   
-			  
-					 
- 
-
-								 
-					   
-			 
-			
-				
-				 
- 
-
-					   
-						
-					   
-				  
-											   
- 
-
-					   
-						   
-		  
-																				 
-	 
-
-			
-					 
-	 
-
-					
-						
-	 
-
-					
-						
-	 
-
-					   
-						
-	 
- 
-
-
-		
- 
-
     </style>
-
-
- 
-
-
-
-
-
-
-
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
- 
-
-
-
-
-
 </head>
 <body>
     <header>
@@ -1250,59 +1039,53 @@ footer {
             </nav>
         </div>
     </header>
-
-
-
-
     <div class="main-content">
     <section class="title-section">
         <div class="container">
             <div id="welcome-title">Willkommen bei Aurora Wetter Lifecam</div>
-            <div id="welcome-subtitle">Erleben Sie faszinierende Ausblicke der Zürcher Region - in Echtzeit!</div>
+            <div id="welcome-subtitle">Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!</div>
         </div>
     </section>
 
     <div class="banner-container">
-    <div class="recommendation-banner">
-        <h2>Unsere Empfehlungen</h2>
-        <div class="sponsor-logos">
-            <?php
-            $advertisements = [
-                ['name' => 'Gartencenter Meier', 'url' => 'https://www.gartencenter-meier.ch', 'img' => 'meier.png', 'text' => 'Gartencenter Meier'],
-                ['name' => 'Restaurant Schweizerhof', 'url' => 'https://schweizerhof-duernten.ch/', 'img' => 'schweiz.png', 'text' => 'Hotel Schweizerhof'],
-                ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png', 'text' => 'Werben Sie hier'],
-                
-                ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png', 'text' => 'Werben Sie hier'],
-                ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png', 'text' => 'Werben Sie hier'],
-                ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png', 'text' => 'Werben Sie hier'],
-                 
-                
-                // Fügen Sie hier weitere Werbeanzeigen hinzu
-            ];
+        <div class="recommendation-banner">
+            <h2>Unsere Empfehlungen</h2>
+            <div class="sponsor-logos">
+                <?php
+                $advertisements = [
+                    ['name' => 'Gartencenter Meier', 'url' => 'https://www.gartencenter-meier.ch', 'img' => 'meier.png'],
+                    ['name' => 'Restaurant Schweizerhof', 'url' => 'https://schweizerhof-duernten.ch/', 'img' => 'schweiz.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png'],
+                    ['name' => 'Deine Werbung bei uns', 'url' => 'https://www.aurora-wetter-lifecam.ch/', 'img' => 'werbung.png']
+				
+															  
+                ];
 
-            $grouped_ads = array_chunk($advertisements, 3);
+                $grouped_ads = array_chunk($advertisements, 5);
 
-            foreach ($grouped_ads as $group) {
-                echo '<div class="ad-row">';
-                foreach ($group as $ad) {
-                    echo '<div class="ad-item">
-                        <a href="' . htmlspecialchars($ad['url']) . '" target="_blank">
-                            <img src="' . htmlspecialchars($ad['img']) . '" alt="' . htmlspecialchars($ad['name']) . '">
-                            <p>' . htmlspecialchars($ad['text']) . '</p>
-                        </a>
-								
-					 
-                    </div>';
+                foreach ($grouped_ads as $group) {
+                    echo '<div class="ad-row">';
+                    foreach ($group as $ad) {
+                        echo '<div class="ad-item">
+                            <a href="' . $ad['url'] . '" target="_blank">
+                                <img src="' . $ad['img'] . '" alt="' . $ad['name'] . '">
+																		
+                            </a>
+                        </div>';
+                    }
+                    echo '</div>';
                 }
-				  
-                echo '</div>';
-            }
-            ?>
+                ?>
+            </div>
+			 
+			  
         </div>
     </div>
 </div>
-
-
 
 
 
@@ -1313,12 +1096,8 @@ footer {
 
     <div class="video-container">
     <?php echo $webcamManager->displayWebcam(); ?>
-    <div id="timelapse-viewer" class="video-container"  style="  margin-top: 300px;   max-width: 100%;
-    height: auto;
-    max-height: 70vh;">
-        <img id="timelapse-image" src="" alt="Timelapse Image" class="video-container" style="  margin-top: 500px; max-width: 100%;
-    height: auto;
-    max-height: 70vh;">>
+    <div id="timelapse-viewer" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+        <img id="timelapse-image" src="" alt="Timelapse Image" style="width: 100%; height: 100%; object-fit: cover;">
     </div>
 
  
@@ -1397,11 +1176,6 @@ footer {
         </div>
             </div>
         </section>
-
-
-
-
-
         <section id="ueber-uns" class="section">
             <div class="container">
                 <h2>Über unser Projekt</h2>
@@ -1413,18 +1187,6 @@ footer {
                 </div>
             </div>
         </section>
-
-
-                       
-
-
-
-
-
-
-
-
-
         <?php if ($adminManager->isAdmin()): ?>
         <section id="admin" class="section">
             <div class="container">
@@ -1458,6 +1220,8 @@ footer {
                 <a href="#guestbook">Gästebuch</a>
                 <a href="#kontakt">Kontakt</a>
                 <a href="#gallery">Galerie</a>
+                <a href="#impressum">Impressum</a>
+
             </div>
             <div class="footer-bottom">
                 <p>&copy; 2024 Aurora Wetter Lifecam</p>
@@ -1577,14 +1341,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-
-
- 
-
-
-
-
-
 <script> 
 document.addEventListener('DOMContentLoaded', function() {
     var timelapseButton = document.getElementById('timelapse-button');
@@ -1624,44 +1380,74 @@ document.addEventListener('DOMContentLoaded', function() {
             sunnyTimelapseButton.textContent = 'Nur sonnige Bilder zeigen';
         }
     }
- const imageCache = new Map();
+
+    const imageCache = new Map();
 const preloadBuffer = 5; // Anzahl der im Voraus zu ladenden Bilder
 
+
 async function startTimelapse() {
+    console.log("startTimelapse wurde aufgerufen");
     if (imageFiles.length === 0) {
         console.log("Keine Bilder gefunden");
         return;
     }
     
-    timelapseInterval = setInterval(async function() {
+    const displayDuration = 20.83; // Millisekunden pro Bild
+    console.log(`Anzeigedauer pro Bild: ${displayDuration} ms`);
+    
+    async function showNextImage() {
+        console.log(`Aktueller Bildindex: ${currentImageIndex}`);
         while (currentImageIndex < imageFiles.length) {
             const currentImage = imageFiles[currentImageIndex];
+            console.log(`Verarbeite Bild: ${currentImage}`);
             
-            // Lazy Loading: Lade das aktuelle Bild und die nächsten paar
+            // Lazy Loading
             for (let i = currentImageIndex; i < currentImageIndex + preloadBuffer && i < imageFiles.length; i++) {
                 if (!imageCache.has(imageFiles[i])) {
+                    console.log(`Lade Bild in Cache: ${imageFiles[i]}`);
                     imageCache.set(imageFiles[i], getImageData(imageFiles[i]));
                 }
             }
             
-            const imageData = await imageCache.get(currentImage);
-            if (!isGreyImage(imageData) && (!showOnlySunny || isSunnyImage(imageData))) {
-                timelapseImage.src = currentImage;
-                currentImageIndex++;
-                
-                // Cache-Bereinigung: Entferne alte Bilder aus dem Cache
-                if (imageCache.size > preloadBuffer * 2) {
-                    const keysToDelete = Array.from(imageCache.keys()).slice(0, imageCache.size - preloadBuffer);
-                    keysToDelete.forEach(key => imageCache.delete(key));
+            try {
+                const imageData = await imageCache.get(currentImage);
+                if (!isGreyImage(imageData) && (!showOnlySunny || isSunnyImage(imageData))) {
+                    console.log(`Zeige Bild an: ${currentImage}`);
+                    timelapseImage.src = currentImage;
+                    currentImageIndex++;
+                    
+                    // Cache-Bereinigung
+                    if (imageCache.size > preloadBuffer * 2) {
+                        console.log("Führe Cache-Bereinigung durch");
+                        const keysToDelete = Array.from(imageCache.keys()).slice(0, imageCache.size - preloadBuffer);
+                        keysToDelete.forEach(key => imageCache.delete(key));
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, displayDuration));
+                    return;
+                } else {
+                    console.log(`Überspringe Bild: ${currentImage}`);
                 }
-                
-                return;
+            } catch (error) {
+                console.error(`Fehler beim Verarbeiten des Bildes ${currentImage}:`, error);
             }
             currentImageIndex++;
         }
-        currentImageIndex = 0; // Zurück zum Anfang, wenn alle Bilder durchlaufen wurden
-    }, 500);
+        console.log("Alle Bilder durchlaufen, setze Index zurück");
+        currentImageIndex = 0;
+    }
+
+    async function runTimelapse() {
+        console.log("runTimelapse gestartet");
+        while (timelapseViewer.style.display !== 'none') {
+            await showNextImage();
+        }
+        console.log("Zeitraffer beendet");
+    }
+
+    runTimelapse().catch(error => console.error("Fehler im Zeitraffer:", error));
 }
+	
 function updateTimelapseImage() {
     timelapseImage.src = imageFiles[currentImageIndex];
     timelapseSlider.value = currentImageIndex;
@@ -1697,7 +1483,6 @@ function getImageData(src) {
 }
 
 
-
     function stopTimelapse() {
         clearInterval(timelapseInterval);
         currentImageIndex = 0;
@@ -1721,12 +1506,12 @@ function getImageData(src) {
     }
     return true; // Das Bild ist grau, aber natürlich :)
 }
-
+ 
 function isSunnyImage(imageData) {
     const data = imageData.data;
     const width = imageData.width;
     const height = imageData.height;
-    
+   						  
     // Nur den oberen Drittel des Bildes analysieren 
     const searchHeight = Math.floor(height / 3);
     
@@ -1759,21 +1544,8 @@ function isSunnyImage(imageData) {
     // Als sonnig betrachten, wenn genügend gelbe Pixel gefunden wurden
     return sunPixels > minSunSize * minSunSize;
 }
-
-
-
-
 });
-
-
-    
-
-
-
-
     </script>
-
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var qrCodeElement = document.getElementById('qrcode');
@@ -1787,9 +1559,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-
-
-
 <div id="imageModal" class="modal">
   <span class="close">&times;</span>
   <img class="modal-content" id="modalImage">
@@ -1797,6 +1566,19 @@ document.addEventListener('DOMContentLoaded', function() {
   <a id="downloadLink" href="#" download class="download-btn">Download</a>
 </div>
 
+
+<section id="impressum" class="section">
+    <div class="container">
+        <h2>Impressum</h2>
+        <p>Aurora Wetter Lifecam</p>
+        <p>Musterstraße 123</p>
+        <p>12345 Musterstadt</p>
+        <p>Schweiz</p>
+        <p>E-Mail: info@aurora-wetter-lifecam.ch</p>
+        <p>Telefon: +41 123 456 789</p>
+        <p>Verantwortlich für den Inhalt: Max Mustermann</p>
+    </div>
+</section>
 
 
 
