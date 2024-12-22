@@ -1,8 +1,16 @@
 <?php
 /***************************************************************
  *  Einseiten-Anwendung (index.php) für eine Linkliste
- *  mit Login-/Logout-Funktion, einfacher JSON-Datenspeicherung
- *  und optionalem Vorschaubild pro Link (mit YouTube-Icon).
+ *  mit folgenden Features:
+ *
+ *  - Login/Logout (User admin, PW gradio)
+ *  - JSON-Datenspeicherung
+ *  - Suchfunktion
+ *  - Klickzähler (Links)
+ *  - Favoriten (Toggle)
+ *  - Voting-System (Up-/Downvote -> Score)
+ *  - Optionales Vorschaubild (YouTube-Icon bei youtube.com)
+ *  - Optionales Hintergrundbild (konfigurierbar)
  ***************************************************************/
 
 session_start();
@@ -16,6 +24,11 @@ $USER_CREDENTIALS = [
 // Dateiname, in dem unsere Links gespeichert werden
 $LINKS_FILE = __DIR__ . '/links.json';
 
+// Optionales Hintergrundbild (leer lassen, falls kein Hintergrundbild)
+$BACKGROUND_IMAGE = ""; 
+// Beispiel: $BACKGROUND_IMAGE = "https://via.placeholder.com/1200x800/404040/FFFFFF?text=Background";
+
+// ---------------------- Hilfsfunktionen -----------------------
 /**
  * Lädt die Linkliste aus dem JSON-File
  *
@@ -75,20 +88,37 @@ if (isset($_POST['action']) && $_POST['action'] === 'login') {
 // ---------------------- Link-Management -----------------------
 $links = loadLinks($LINKS_FILE);
 
-// Link hinzufügen/bearbeiten/löschen nur, wenn eingeloggt
+// Falls wir per GET "go" einen Link aufrufen, Klickzähler erhöhen und weiterleiten
+if (isset($_GET['go'])) {
+    $goIndex = intval($_GET['go']);
+    if (isset($links[$goIndex])) {
+        // Klickzähler um 1 erhöhen
+        $links[$goIndex]['clicks'] = ($links[$goIndex]['clicks'] ?? 0) + 1;
+        saveLinks($links, $LINKS_FILE);
+
+        // Weiterleitung zum tatsächlichen Ziel
+        header("Location: " . $links[$goIndex]['url']);
+        exit;
+    }
+}
+
+// Link hinzufügen/bearbeiten/löschen/favorisieren/voten nur, wenn eingeloggt
 if (isLoggedIn()) {
-    
+
     // Link hinzufügen
     if (isset($_POST['action']) && $_POST['action'] === 'add_link') {
         $newTitle   = trim($_POST['title'] ?? '');
         $newUrl     = trim($_POST['url'] ?? '');
-        $newImgUrl  = trim($_POST['image'] ?? ''); // Bild-URL (optional)
+        $newImgUrl  = trim($_POST['image'] ?? '');
 
         if ($newTitle !== '' && $newUrl !== '') {
             $links[] = [
-                'title' => $newTitle,
-                'url'   => $newUrl,
-                'image' => $newImgUrl
+                'title'    => $newTitle,
+                'url'      => $newUrl,
+                'image'    => $newImgUrl,
+                'clicks'   => 0,
+                'favorite' => false,
+                'score'    => 0  // neu fürs Voting
             ];
             saveLinks($links, $LINKS_FILE);
             header("Location: {$_SERVER['PHP_SELF']}");
@@ -104,9 +134,14 @@ if (isLoggedIn()) {
         $editImg   = trim($_POST['image'] ?? '');
 
         if ($editIndex >= 0 && isset($links[$editIndex])) {
-            $links[$editIndex]['title'] = $editTitle;
-            $links[$editIndex]['url']   = $editUrl;
-            $links[$editIndex]['image'] = $editImg;
+            $links[$editIndex]['title']    = $editTitle;
+            $links[$editIndex]['url']      = $editUrl;
+            $links[$editIndex]['image']    = $editImg;
+            // Sicherstellen, dass Klickzähler, Favoriten, Score ex. sind
+            $links[$editIndex]['clicks']   = $links[$editIndex]['clicks'] ?? 0;
+            $links[$editIndex]['favorite'] = $links[$editIndex]['favorite'] ?? false;
+            $links[$editIndex]['score']    = $links[$editIndex]['score'] ?? 0;
+
             saveLinks($links, $LINKS_FILE);
             header("Location: {$_SERVER['PHP_SELF']}");
             exit;
@@ -124,7 +159,45 @@ if (isLoggedIn()) {
             exit;
         }
     }
+
+    // Favorit toggeln
+    if (isset($_POST['action']) && $_POST['action'] === 'toggle_fav') {
+        $favIndex = intval($_POST['index'] ?? -1);
+        if ($favIndex >= 0 && isset($links[$favIndex])) {
+            $isFav = $links[$favIndex]['favorite'] ?? false;
+            $links[$favIndex]['favorite'] = !$isFav;
+            saveLinks($links, $LINKS_FILE);
+            header("Location: {$_SERVER['PHP_SELF']}");
+            exit;
+        }
+    }
+
+    // Voting Up/Down
+    if (isset($_POST['action']) && in_array($_POST['action'], ['vote_up', 'vote_down'])) {
+        $voteIndex = intval($_POST['index'] ?? -1);
+        if ($voteIndex >= 0 && isset($links[$voteIndex])) {
+            $links[$voteIndex]['score'] = $links[$voteIndex]['score'] ?? 0;
+            if ($_POST['action'] === 'vote_up') {
+                $links[$voteIndex]['score']++;
+            } else {
+                $links[$voteIndex]['score']--;
+            }
+            saveLinks($links, $LINKS_FILE);
+            header("Location: {$_SERVER['PHP_SELF']}");
+            exit;
+        }
+    }
 }
+
+// ---------------------- Suchfunktion (für alle User) ----------
+$searchQuery = trim($_GET['search'] ?? '');
+
+// Links filtern (Titel oder URL enthalten den Suchbegriff)
+$filteredLinks = array_filter($links, function($link) use ($searchQuery) {
+    if ($searchQuery === '') return true; // Nichts gesucht -> Alle Links
+    return (stripos($link['title'], $searchQuery) !== false || 
+            stripos($link['url'],   $searchQuery) !== false);
+});
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -140,26 +213,29 @@ if (isLoggedIn()) {
             box-sizing: border-box;
         }
 
-        /* -------- Körperhintergrund (Beispiel) -------- */
+        /* -------- Hintergrundbild optional -------- */
+        <?php if (!empty($BACKGROUND_IMAGE)): ?>
         body {
             font-family: Arial, sans-serif;
-            /* Beispiel mit Farbverlauf: 
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-            */
-            /* Oder mit Bild (z. B. ein Funkgerät, Antenne etc.):
-               Bitte Pfad/URL anpassen! */
-            background: url('https://via.placeholder.com/1200x800/404040/FFFFFF?text=-') 
+            background: url('<?php echo $BACKGROUND_IMAGE; ?>')
                         no-repeat center center fixed;
             background-size: cover;
-
             color: #f0f0f0;
             padding: 20px;
         }
+        <?php else: ?>
+        body {
+            font-family: Arial, sans-serif;
+            background: #303030; /* Einfacher Hintergrund */
+            color: #f0f0f0;
+            padding: 20px;
+        }
+        <?php endif; ?>
 
         .container {
             max-width: 700px;
             margin: 0 auto;
-            background-color: rgba(0, 0, 0, 0.65); /* dunkle Transparenz, damit Schrift lesbar bleibt */
+            background-color: rgba(0, 0, 0, 0.65); 
             padding: 20px;
             border-radius: 10px;
         }
@@ -202,7 +278,6 @@ if (isLoggedIn()) {
             color: #333;
             cursor: pointer;
         }
-
         .login button:hover, .nav button:hover {
             background-color: #3399ff;
         }
@@ -212,6 +287,30 @@ if (isLoggedIn()) {
             color: #ffaaaa;
             text-align: center;
             margin-bottom: 10px;
+        }
+
+        /* -------- Suchformular -------- */
+        .search-form {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .search-form input[type="text"] {
+            width: 70%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            margin-right: 8px;
+        }
+        .search-form button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            background-color: #66c2ff;
+            color: #333;
+            cursor: pointer;
+        }
+        .search-form button:hover {
+            background-color: #3399ff;
         }
 
         /* -------- Linkliste und einzelner Link-Eintrag -------- */
@@ -228,7 +327,45 @@ if (isLoggedIn()) {
             margin-bottom: 10px;
             display: flex;
             align-items: center;
-            flex-wrap: wrap; /* Für mobiles Umfließen */
+            flex-wrap: wrap;
+            position: relative;
+        }
+
+        /* -------- Favoritenstern ---------- */
+        .favorite-star {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1.3em;
+            color: gold;
+        }
+        .favorite-star.hidden {
+            display: none;
+        }
+
+        /* -------- Voting-Bereich (Up/Down) -------- */
+        .voting-container {
+            margin-right: 15px;
+            text-align: center;
+        }
+        .voting-container form {
+            margin: 5px 0;
+        }
+        .voting-button {
+            background-color: #66c2ff;
+            color: #333;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+        }
+        .voting-button:hover {
+            background-color: #3399ff;
+        }
+        .score-display {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #ffcc00;
         }
 
         /* -------- Vorschaubild rechts neben dem Text -------- */
@@ -240,7 +377,7 @@ if (isLoggedIn()) {
             border-radius: 8px;
             margin-left: auto; 
             margin-right: 0;
-            margin-left: 10px; /* etwas Abstand zum Text */
+            margin-left: 10px; 
         }
 
         .links-list a {
@@ -250,7 +387,7 @@ if (isLoggedIn()) {
             word-wrap: break-word;
         }
 
-        /* -------- Buttons zum Bearbeiten/Löschen -------- */
+        /* -------- Buttons zum Bearbeiten/Löschen/Favorisieren -------- */
         .admin-buttons {
             margin-top: 5px;
         }
@@ -278,18 +415,15 @@ if (isLoggedIn()) {
             padding: 15px;
             border-radius: 6px;
         }
-
         .form-container h2 {
             margin-bottom: 10px;
             color: #66c2ff;
         }
-
         .form-container label {
             display: block;
             margin: 8px 0 4px;
             color: #f0f0f0;
         }
-
         .form-container input[type="text"], 
         .form-container input[type="url"], 
         .form-container input[type="password"] {
@@ -299,7 +433,6 @@ if (isLoggedIn()) {
             border-radius: 4px;
             margin-bottom: 10px;
         }
-
         .form-container .submit-button {
             background-color: #66c2ff;
             color: #333;
@@ -327,12 +460,21 @@ if (isLoggedIn()) {
             .login, .nav {
                 flex-direction: column;
             }
+            .search-form input[type="text"] {
+                width: 100%;
+                margin-bottom: 10px;
+            }
             .links-list li {
                 flex-direction: column;
                 align-items: flex-start;
+                position: relative;
             }
             .links-list .thumbnail {
                 margin: 10px 0 0 0;
+            }
+            .voting-container {
+                margin-right: 0;
+                margin-bottom: 10px;
             }
         }
     </style>
@@ -371,20 +513,75 @@ if (isLoggedIn()) {
         </div>
     <?php endif; ?>
 
-    <!-- Linkliste anzeigen -->
+    <!-- Suchformular (für alle Benutzer) -->
+    <div class="search-form">
+        <form method="get" action="<?php echo $_SERVER['PHP_SELF']; ?>">
+            <input type="text" name="search" placeholder="Links durchsuchen..." value="<?php echo htmlspecialchars($searchQuery); ?>">
+            <button type="submit">Suchen</button>
+        </form>
+    </div>
+
+    <!-- Linkliste anzeigen (gefiltert nach Suchbegriff) -->
     <ul class="links-list">
-        <?php foreach ($links as $index => $link): ?>
+        <?php foreach ($filteredLinks as $index => $link): ?>
             <li>
+                <!-- Favoriten-Stern (falls Link als Favorit markiert ist) -->
+                <div class="favorite-star <?php echo empty($link['favorite']) ? 'hidden' : ''; ?>">★</div>
+                
+                <!-- VOTING: Up/Down + Score -->
+                <?php if (isLoggedIn()): ?>
+                    <div class="voting-container">
+                        <!-- Score anzeigen -->
+                        <div class="score-display">
+                            <?php echo (int)($link['score'] ?? 0); ?>
+                        </div>
+                        <!-- Upvote-Form -->
+                        <form method="post" action="<?php echo $_SERVER['PHP_SELF']; ?>">
+                            <input type="hidden" name="action" value="vote_up">
+                            <input type="hidden" name="index" value="<?php echo $index; ?>">
+                            <button class="voting-button" type="submit">▲</button>
+                        </form>
+                        <!-- Downvote-Form -->
+                        <form method="post" action="<?php echo $_SERVER['PHP_SELF']; ?>">
+                            <input type="hidden" name="action" value="vote_down">
+                            <input type="hidden" name="index" value="<?php echo $index; ?>">
+                            <button class="voting-button" type="submit">▼</button>
+                        </form>
+                    </div>
+                <?php else: ?>
+                    <!-- Score-Anzeige für nicht eingeloggte Nutzer (ohne Voting-Buttons) -->
+                    <div class="voting-container">
+                        <div class="score-display">
+                            <?php echo (int)($link['score'] ?? 0); ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <div>
-                    <a href="<?php echo htmlspecialchars($link['url']); ?>" target="_blank">
+                    <!-- Der eigentliche Link geht nicht direkt auf die URL, sondern mit ?go=INDEX zum Klickzählen -->
+                    <a href="?go=<?php echo $index; ?>" target="_blank">
                         <?php echo htmlspecialchars($link['title']); ?>
                     </a>
+                    
+                    <!-- Aufruf-Anzeige -->
+                    <p style="margin-top:5px; font-size:0.9em; color:#ccc;">
+                        Aufrufe: <?php echo (int)($link['clicks'] ?? 0); ?>
+                    </p>
+
                     <?php if (isLoggedIn()) : ?>
                         <div class="admin-buttons">
                             <!-- Edit Button -->
                             <button onclick="document.getElementById('editForm<?php echo $index; ?>').style.display='block'">
                                 Bearbeiten
                             </button>
+                            <!-- Toggle Favorite -->
+                            <form method="post" action="<?php echo $_SERVER['PHP_SELF']; ?>" style="display:inline;">
+                                <input type="hidden" name="action" value="toggle_fav">
+                                <input type="hidden" name="index" value="<?php echo $index; ?>">
+                                <button type="submit">
+                                    <?php echo empty($link['favorite']) ? 'Favorisieren' : 'Un-Fav'; ?>
+                                </button>
+                            </form>
                             <!-- Delete Form -->
                             <form method="post" action="<?php echo $_SERVER['PHP_SELF']; ?>" style="display:inline;">
                                 <input type="hidden" name="action" value="delete_link">
@@ -405,8 +602,7 @@ if (isLoggedIn()) {
                     if (empty($imgSrc)) {
                         $host = parse_url($link['url'], PHP_URL_HOST) ?: '';
                         if (strpos($host, 'youtube.com') !== false || strpos($host, 'youtu.be') !== false) {
-                            // YouTube-Icon verwenden (hier beispielhaft Logo von Wikipedia)
-                            // Du kannst auch eine andere URL oder ein eigenes Icon nehmen
+                            // YouTube-Icon verwenden (z.B. SVG von Wikipedia)
                             $imgSrc = 'https://upload.wikimedia.org/wikipedia/commons/7/75/YouTube_social_white_squircle_%282017%29.svg';
                         }
                     }
@@ -476,7 +672,7 @@ if (isLoggedIn()) {
     <?php endif; ?>
 
     <footer>
-        <p>© <?php echo date('Y'); ?> Amateurfunk-Linkliste </p>
+        <p>© 2024 Amateurfunk-Linkliste</p>
     </footer>
 </div>
 </body>
