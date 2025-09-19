@@ -116,7 +116,7 @@ class WebcamManager {
             
         } else {
             
-        }				  
+        }				   
 							   
 		 
 
@@ -126,10 +126,23 @@ class WebcamManager {
         unlink($outputFile);
         exit;
     }
-    public function getImageFiles() {
-        $imageFiles = glob("image/*.{jpg,jpeg,png,gif}", GLOB_BRACE);
-        return json_encode($imageFiles);
-    }
+public function getImageFiles() {
+    // Nur JPG-Dateien aus uploads/, KEINE MP4-Dateien
+    $imageFiles = glob("uploads/*.{jpg,jpeg,png,gif}", GLOB_BRACE);
+    
+    // Filtere unerwünschte Dateien aus
+    $imageFiles = array_filter($imageFiles, function($file) {
+        $basename = basename($file);
+        // Blockiere sequence_*.mp4 und andere unerwünschte Dateien
+        return pathinfo($file, PATHINFO_EXTENSION) !== 'mp4' && 
+               strpos($basename, 'sequence_') !== 0;
+    });
+    
+    return json_encode(array_values($imageFiles));
+}
+
+
+
     
     public function captureVideoSequence($duration = 10) {
         $outputFile = 'sequence_' . date('YmdHis') . '.mp4';
@@ -163,34 +176,300 @@ class WebcamManager {
         unlink($outputFile);
         exit;
     }
+    
 
     public function getJavaScript() {
-        return "
-        document.addEventListener('DOMContentLoaded', function () {
-            var video = document.getElementById('webcam-player');
-            var videoSrc = '{$this->videoSrc}';
-            if (Hls.isSupported()) {
-                var hls = new Hls();
-                hls.loadSource(videoSrc);
-                hls.attachMedia(video);
-                hls.on(Hls.Events.MANIFEST_PARSED, function () {
-                    video.play();
+    return "
+    document.addEventListener('DOMContentLoaded', function () {
+        var video = document.getElementById('webcam-player');
+        var videoSrc = '{$this->videoSrc}';
+        
+        if (Hls.isSupported()) {
+            var hls = new Hls({
+                // WICHTIG: Live-Stream-Einstellungen
+                liveSyncDurationCount: 3,    // Halte 3 Segmente Abstand zum Live-Edge
+                liveMaxLatencyDurationCount: 10, // Max 10 Segmente hinter Live
+                liveDurationInfinity: true,   // Stream hat kein Ende
+                enableWorker: true,
+                lowLatencyMode: false,        // Stabilität vor Latenz
+                backBufferLength: 90,         // 90 Sekunden Back-Buffer
+                maxBufferLength: 60,          // 60 Sekunden Forward-Buffer
+                maxMaxBufferLength: 120,      // Max 120 Sekunden
+                maxBufferSize: 120*1000*1000, // 120MB Buffer
+                
+                // Starlink-Optimierungen
+                manifestLoadingTimeOut: 10000,
+                manifestLoadingMaxRetry: 5,
+                levelLoadingTimeOut: 10000,
+                levelLoadingMaxRetry: 5,
+                fragLoadingTimeOut: 10000,
+                fragLoadingMaxRetry: 5
+            });
+            
+            hls.loadSource(videoSrc);
+            hls.attachMedia(video);
+            
+            hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                console.log('Stream geladen');
+                
+                // WICHTIG: Springe zum Live-Edge minus 60 Sekunden
+                if (hls.liveSyncPosition !== null) {
+                    var targetPosition = hls.liveSyncPosition - 60;
+                    console.log('Setze Position auf: ' + targetPosition + ' (60s vor Live)');
+                    video.currentTime = targetPosition;
+                }
+                
+                video.play().catch(function(e) {
+                    console.log('Autoplay blockiert');
                 });
-            }
-            else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = videoSrc;
-                video.addEventListener('loadedmetadata', function () {
-                    video.play();
-                });
-            }
-        });
-        ";
-    }
+            });
+            
+            // Überwache den Live-Sync
+            hls.on(Hls.Events.LEVEL_UPDATED, function(event, data) {
+                console.log('Stream aktualisiert, neue Segmente verfügbar');
+                
+                // Wenn wir zu weit zurückfallen, springe vor
+                if (video.currentTime < hls.liveSyncPosition - 120) {
+                    console.log('Zu weit zurück, springe näher zum Live-Edge');
+                    video.currentTime = hls.liveSyncPosition - 60;
+                }
+            });
+            
+            // Fehlerbehandlung
+            hls.on(Hls.Events.ERROR, function(event, data) {
+                if (data.fatal) {
+                    switch(data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            console.log('Netzwerkfehler - versuche erneut...');
+                            setTimeout(function() {
+                                hls.startLoad();
+                            }, 3000);
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            console.log('Media-Fehler - Recovery...');
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            console.log('Kritischer Fehler - Neustart...');
+                            hls.destroy();
+                            location.reload();
+                            break;
+                    }
+                }
+            });
+            
+            // Automatisches Nachladen erzwingen
+            setInterval(function() {
+                if (!video.paused && !video.seeking) {
+                    // Prüfe ob neue Segmente verfügbar sind
+                    if (hls.levels && hls.levels.length > 0) {
+                        var level = hls.levels[hls.currentLevel];
+                        if (level && level.details && level.details.live) {
+                            console.log('Live-Stream läuft, Edge bei: ' + level.details.edge);
+                            
+                            // Wenn wir am Ende sind, lade neue Segmente
+                            var bufferEnd = 0;
+                            if (video.buffered.length > 0) {
+                                bufferEnd = video.buffered.end(video.buffered.length - 1);
+                            }
+                            
+                            if (bufferEnd - video.currentTime < 10) {
+                                console.log('Buffer niedrig, lade neue Segmente...');
+                                hls.startLoad();
+                            }
+                        }
+                    }
+                }
+            }, 5000); // Alle 5 Sekunden prüfen
+            
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Safari/iOS Fallback
+            video.src = videoSrc;
+            video.addEventListener('loadedmetadata', function () {
+                // Für Safari: Setze currentTime zurück für Pseudo-DVR
+                video.currentTime = Math.max(0, video.duration - 60);
+                video.play();
+            });
+        }
+    });
+    ";
+}
+
+
+
+
 
     public function setVideoSrc($src) {
         $this->videoSrc = $src;
     }
 }
+
+
+
+
+
+
+
+
+
+
+class VisualCalendarManager {
+    private $videoDir;
+    private $monthNames;
+    
+    public function __construct($videoDir = './image/') {
+        $this->videoDir = $videoDir;
+        $this->monthNames = [
+            1 => ['de' => 'Januar', 'en' => 'January', 'it' => 'Gennaio', 'fr' => 'Janvier', 'zh' => '一月'],
+            2 => ['de' => 'Februar', 'en' => 'February', 'it' => 'Febbraio', 'fr' => 'Février', 'zh' => '二月'],
+            3 => ['de' => 'März', 'en' => 'March', 'it' => 'Marzo', 'fr' => 'Mars', 'zh' => '三月'],
+            4 => ['de' => 'April', 'en' => 'April', 'it' => 'Aprile', 'fr' => 'Avril', 'zh' => '四月'],
+            5 => ['de' => 'Mai', 'en' => 'May', 'it' => 'Maggio', 'fr' => 'Mai', 'zh' => '五月'],
+            6 => ['de' => 'Juni', 'en' => 'June', 'it' => 'Giugno', 'fr' => 'Juin', 'zh' => '六月'],
+            7 => ['de' => 'Juli', 'en' => 'July', 'it' => 'Luglio', 'fr' => 'Juillet', 'zh' => '七月'],
+            8 => ['de' => 'August', 'en' => 'August', 'it' => 'Agosto', 'fr' => 'Août', 'zh' => '八月'],
+            9 => ['de' => 'September', 'en' => 'September', 'it' => 'Settembre', 'fr' => 'Septembre', 'zh' => '九月'],
+            10 => ['de' => 'Oktober', 'en' => 'October', 'it' => 'Ottobre', 'fr' => 'Octobre', 'zh' => '十月'],
+            11 => ['de' => 'November', 'en' => 'November', 'it' => 'Novembre', 'fr' => 'Novembre', 'zh' => '十一月'],
+            12 => ['de' => 'Dezember', 'en' => 'December', 'it' => 'Dicembre', 'fr' => 'Décembre', 'zh' => '十二月']
+        ];
+    }
+    
+    public function getVideosForDate($year, $month, $day) {
+        $videos = [];
+        $dateStr = sprintf('%04d%02d%02d', $year, $month, $day);
+        
+        foreach (glob($this->videoDir . "daily_video_{$dateStr}_*.mp4") as $video) {
+            $videos[] = [
+                'path' => $video,
+                'filename' => basename($video),
+                'filesize' => filesize($video),
+                'time' => date('H:i', filemtime($video))
+            ];
+        }
+        
+        return $videos;
+    }
+    
+    public function hasVideosForDate($year, $month, $day) {
+        $dateStr = sprintf('%04d%02d%02d', $year, $month, $day);
+        $pattern = $this->videoDir . "daily_video_{$dateStr}_*.mp4";
+        return count(glob($pattern)) > 0;
+    }
+    
+    public function displayVisualCalendar() {
+        $currentYear = isset($_GET['cal_year']) ? intval($_GET['cal_year']) : date('Y');
+        $currentMonth = isset($_GET['cal_month']) ? intval($_GET['cal_month']) : date('n');
+        $selectedDay = isset($_GET['cal_day']) ? intval($_GET['cal_day']) : null;
+        
+        $output = '<div class="visual-calendar-container">';
+        
+        // Navigation
+        $output .= '<div class="calendar-navigation">';
+        $output .= '<button onclick="changeMonth(' . $currentYear . ',' . ($currentMonth - 1) . ')" class="cal-nav-btn">◀</button>';
+        $output .= '<h3>' . $this->monthNames[$currentMonth]['de'] . ' ' . $currentYear . '</h3>';
+        $output .= '<button onclick="changeMonth(' . $currentYear . ',' . ($currentMonth + 1) . ')" class="cal-nav-btn">▶</button>';
+        $output .= '</div>';
+        
+        // Kalender-Grid
+        $output .= '<div class="calendar-grid">';
+        
+        // Wochentage Header
+        $weekdays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+        foreach ($weekdays as $day) {
+            $output .= '<div class="calendar-weekday">' . $day . '</div>';
+        }
+        
+        // Tage des Monats
+        $firstDay = mktime(0, 0, 0, $currentMonth, 1, $currentYear);
+        $daysInMonth = date('t', $firstDay);
+        $dayOfWeek = date('N', $firstDay) - 1; // 0 = Montag
+        
+        // Leere Zellen vor dem ersten Tag
+        for ($i = 0; $i < $dayOfWeek; $i++) {
+            $output .= '<div class="calendar-day empty"></div>';
+        }
+        
+        // Tage mit Videos markieren
+        for ($day = 1; $day <= $daysInMonth; $day++) {
+            $hasVideos = $this->hasVideosForDate($currentYear, $currentMonth, $day);
+            $isSelected = ($selectedDay == $day);
+            $isToday = ($currentYear == date('Y') && $currentMonth == date('n') && $day == date('j'));
+            
+            $classes = 'calendar-day';
+            if ($hasVideos) $classes .= ' has-video';
+            if ($isSelected) $classes .= ' selected';
+            if ($isToday) $classes .= ' today';
+            
+            $output .= '<div class="' . $classes . '" onclick="selectDay(' . $currentYear . ',' . $currentMonth . ',' . $day . ')">';
+            $output .= '<span class="day-number">' . $day . '</span>';
+            if ($hasVideos) {
+                $output .= '<span class="video-indicator">📹</span>';
+            }
+            $output .= '</div>';
+        }
+        
+        $output .= '</div>'; // calendar-grid
+        
+        // Video-Liste für ausgewählten Tag
+        if ($selectedDay) {
+            $videos = $this->getVideosForDate($currentYear, $currentMonth, $selectedDay);
+            if (!empty($videos)) {
+                $output .= '<div class="day-videos">';
+                $output .= '<h4>Videos vom ' . sprintf('%02d.%02d.%04d', $selectedDay, $currentMonth, $currentYear) . '</h4>';
+                $output .= '<ul class="video-download-list">';
+                
+                foreach ($videos as $video) {
+                    $sizeInMb = round($video['filesize'] / (1024 * 1024), 2);
+                    $token = hash_hmac('sha256', $video['path'], session_id());
+                    
+                    $output .= '<li>';
+                    $output .= '<span class="video-time">🕐 ' . $video['time'] . ' Uhr</span>';
+                    $output .= '<span class="video-size">' . $sizeInMb . ' MB</span>';
+                    $output .= '<a href="?download_specific_video=' . urlencode($video['path']) . '&token=' . $token . '" class="download-link">';
+                    $output .= '⬇️ Download';
+                    $output .= '</a>';
+                    $output .= '</li>';
+                }
+                
+                $output .= '</ul>';
+                $output .= '</div>';
+            } else {
+                $output .= '<div class="no-videos">Keine Videos für diesen Tag verfügbar.</div>';
+            }
+        }
+        
+        $output .= '</div>'; // visual-calendar-container
+        
+        return $output;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class GuestbookManager {
     private $entries = [];
@@ -450,21 +729,36 @@ class AdminManager {
     }
     
     public function displayGalleryImages() {
-        $output = '<div id="gallery-images">';
-        $files = glob("uploads/*.*");
-        foreach($files as $file) {
-            $filename = basename($file);
+    $output = '<div id="gallery-images">';
+    $files = glob("uploads/*.*");
+    foreach($files as $file) {
+        $filename = basename($file);
+        $extension = pathinfo($file, PATHINFO_EXTENSION);
+        
+        // NUR Bilddateien anzeigen, KEINE Videos
+        if (in_array(strtolower($extension), ['jpg', 'jpeg', 'png', 'gif'])) {
             $output .= '<img src="'.$file.'" alt="'.$filename.'" style="width:200px; height:auto; margin:10px; cursor:pointer;">';
         }
-        $output .= '</div>';
-        return $output;
     }
+    $output .= '</div>';
+    return $output;
+}
+
+
+
+
     public function handleSocialMediaUpdate($platform, $url) {
         $socialLinks = json_decode(file_get_contents('social_links.json') ?: '{}', true);
         $socialLinks[$platform] = $url;
         file_put_contents('social_links.json', json_encode($socialLinks));
     }
 }
+
+
+
+// Weather Bingo Manager
+//require_once 'weather_bingo.php';
+//$weatherBingo = new WeatherBingo();
 
 
 
@@ -759,6 +1053,229 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    
    <style>
   /* ========== GRUNDLEGENDE STILE ========== */
+/* ========== GRUNDLEGENDE STILE ========== */
+
+/* ========== VISUELLER KALENDER ========== */
+.visual-calendar-container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+.calendar-navigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    color: white;
+}
+
+.cal-nav-btn {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    font-size: 24px;
+    padding: 5px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.cal-nav-btn:hover {
+    background: rgba(255,255,255,0.3);
+    transform: scale(1.1);
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    margin-bottom: 20px;
+}
+
+.calendar-weekday {
+    text-align: center;
+    font-weight: bold;
+    padding: 10px;
+    background: #f0f0f0;
+    border-radius: 5px;
+    color: #666;
+}
+
+.calendar-day {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    min-height: 60px;
+}
+
+.calendar-day:hover:not(.empty) {
+    transform: scale(1.05);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+    border-color: #667eea;
+}
+
+.calendar-day.empty {
+    background: transparent;
+    border: none;
+    cursor: default;
+}
+
+.calendar-day.has-video {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-color: #2196F3;
+    font-weight: bold;
+}
+
+.calendar-day.selected {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: #764ba2;
+    transform: scale(1.1);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.calendar-day.today {
+    border: 3px solid #4CAF50;
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
+}
+
+.day-number {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.video-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    font-size: 12px;
+}
+
+.day-videos {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.day-videos h4 {
+    color: #333;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #667eea;
+}
+
+.video-download-list {
+    list-style: none;
+    padding: 0;
+}
+
+.video-download-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: white;
+    border-radius: 6px;
+    transition: all 0.3s;
+}
+
+.video-download-list li:hover {
+    background: #e3f2fd;
+    transform: translateX(5px);
+}
+
+.video-time {
+    font-weight: 600;
+    color: #666;
+}
+
+.video-size {
+    color: #999;
+    font-size: 14px;
+}
+
+.download-link {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    text-decoration: none;
+    transition: all 0.3s;
+    font-weight: bold;
+}
+
+.download-link:hover {
+    transform: scale(1.05);
+    box-shadow: 0 3px 10px rgba(76, 175, 80, 0.3);
+}
+
+.no-videos {
+    text-align: center;
+    padding: 30px;
+    color: #999;
+    font-style: italic;
+}
+
+/* Mobile Responsive */
+@media (max-width: 600px) {
+    .calendar-grid {
+        gap: 2px;
+    }
+    
+    .calendar-day {
+        min-height: 45px;
+    }
+    
+    .day-number {
+        font-size: 14px;
+    }
+    
+    .video-download-list li {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
 body {
     font-family: Arial, sans-serif;
     margin: 0;
@@ -783,7 +1300,6 @@ body {
     margin-bottom: 20px;
     position: relative;
     z-index: 10;
-    clear: both;
 }
 
 .section h2 {
@@ -899,7 +1415,7 @@ button[type="submit"]:hover {
     margin-bottom: 20px;
     background-color: #000;
     border-radius: 8px;
-    z-index: 5;
+    z-index: 30; /* Erhöht von 5 auf 30 */
 }
 
 #webcam-player {
@@ -1071,6 +1587,60 @@ label {
     display: block;
     margin-top: 10px;
 }
+
+/* ========== WEATHER BINGO ========== */
+.bingo-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.daily-challenges {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 25px;
+    border-radius: 12px;
+    color: white;
+}
+
+#challenges-list {
+    margin: 20px 0;
+}
+
+.challenge-item {
+    background: rgba(255,255,255,0.1);
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    border: 2px solid transparent;
+}
+
+.challenge-item:hover {
+    background: rgba(255,255,255,0.2);
+    transform: translateX(5px);
+}
+
+/* WICHTIG: Selected State */
+.challenge-item.selected {
+    background: rgba(76, 175, 80, 0.5) !important;
+    border: 2px solid #4CAF50 !important;
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.6);
+}
+
+.challenge-points {
+    background: gold;
+    color: #333;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
 
 /* ========== GALLERY ========== */
 #gallery-images {
@@ -1491,9 +2061,8 @@ footer {
     .ad-item img {
         max-height: 30px;
     }
-
-
 }
+
 
 			   
  
@@ -1542,6 +2111,21 @@ footer {
         Webcam
     </a>
 </li>
+
+<li>
+    <a href="#chat" 
+       data-en="Aurora-Chat" 
+       data-de="Aurora-Chat" 
+       data-it="CAurora-hat" 
+       data-fr="Aurora-Chat"
+       data-zh="聊天">
+        Chat
+    </a>
+</li>
+
+
+
+
 <li>
     <a href="#guestbook" 
        data-en="Guestbook" 
@@ -1682,28 +2266,158 @@ footer {
 
 
 
-    <section id="webcams" class="section">
+<!-- WEATHER BINGO SECTION -->
+<!-- <section id="weather-bingo" class="section">
     <div class="container">
+        <h2 data-en="Weather Bingo" 
+            data-de="Wetter-Bingo" 
+            data-it="Bingo Meteo" 
+            data-fr="Bingo Météo">
+            🎮 Wetter-Bingo
+        </h2>
+        
+         <div class="bingo-container">
+             Tägliche Challenges -->
+            <!--  <div class="daily-challenges">
+                <h3>🎯 Heutige Challenges</h3>
+                <div id="challenges-list"></div>
+                <div class="prediction-form">
+                    <input type="text" id="bingo-username" placeholder="Dein Name" />
+                    <button id="submit-predictions" onclick="submitPredictions()" class="button">Vorhersage abgeben</button>
 
-    <div class="video-container">
-    <?php echo $webcamManager->displayWebcam(); ?>
-    <div id="timelapse-viewer" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-        <img id="timelapse-image" src="" alt="Timelapse Image" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+            </div>
+            
+             
+            <div class="leaderboard-container">
+                <h3>🏆 Tagesrangliste</h3>
+                <div id="daily-leaderboard"></div>
+                
+                <h3>👑 Monatsrangliste</h3>
+                <div id="monthly-leaderboard"></div>
+            </div> -->
+            
+  <!-- Event Verification (Admin only) -->
+<?php if ($adminManager->isAdmin()): ?>
+<div class="event-verification" style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
+    <h3>✅ Heutige Events bestätigen (Admin)</h3>
+    <p>Klicke auf die Events, die heute eingetreten sind:</p>
+    <div id="verify-buttons">
+        <?php 
+        $todaysChallenges = $weatherBingo->getTodaysChallenges();
+        foreach ($todaysChallenges as $event): 
+        ?>
+        <button onclick="verifyBingoEvent('<?php echo $event; ?>')" 
+                class="button verify-btn" 
+                data-event="<?php echo $event; ?>"
+                style="margin: 5px;">
+            <?php 
+            $challenges = $weatherBingo->challenges;
+            echo $challenges[$event]['de'] . ' (' . $challenges[$event]['points'] . ' Punkte)';
+            ?>
+        </button>
+        <?php endforeach; ?>
     </div>
-	  
-    <section id="archive" class="section">
-    <div class="container">
-        <h2 data-en="Video Archive" data-de="Videoarchiv" data-it="Archivio Video" data-fr="Archives Vidéo" data-zh="视频档案">Videoarchiv</h2>
-        <p data-en="Browse and download videos by month and year." 
-           data-de="Durchsuchen und Herunterladen von Videos nach Monat und Jahr." 
-           data-it="Sfoglia e scarica i video per mese e anno." 
-           data-fr="Parcourez et téléchargez des vidéos par mois et par année."
-           data-zh="按月份和年份浏览和下载视频。">
-            Durchsuchen und Herunterladen von Videos nach Monat und Jahr.
-        </p>
-        <?php echo $videoArchiveManager->displayCalendarInterface(); ?>
+    <div id="verify-status" style="margin-top: 10px; color: green;"></div>
+</div>
+<?php endif; ?>
+
+        </div>
     </div>
 </section>
+
+
+
+
+<!-- KORRIGIERTE STRUKTUR -->
+<section id="webcams" class="section">
+    <div class="container">
+        <div class="video-container">
+            <?php echo $webcamManager->displayWebcam(); ?>
+            <div id="timelapse-viewer" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                <img id="timelapse-image" src="" alt="Timelapse Image" style="width: 100%; height: 100%; object-fit: cover;">
+            </div>
+        </div> <!-- video-container schließen -->
+        
+        <div class="webcam-controls" style="text-align: center;">
+            <a href="?action=snapshot" class="button" 
+               data-en="Save Snapshot" 
+               data-de="Snapshot speichern"
+               data-it="Salva Screenshot" 
+               data-fr="Sauvegarder Snapshot"
+               data-zh="保存快照">
+               Snapshot speichern
+            </a>
+            <a href="?action=sequence" class="button" 
+               data-en="Save Video Clip" 
+               data-de="Videoclip speichern"
+               data-it="Salva Clip Video"
+               data-fr="Sauvegarder Clip Vidéo"
+               data-zh="保存视频剪辑">
+               Videoclip speichern
+            </a>
+            <a href="#" class="button" id="timelapse-button" 
+               data-en="Daily Timelapse" 
+               data-de="Tagesablauf im Zeitraffer"
+               data-it="Timelapse Giornaliero" 
+               data-fr="Timelapse Quotidien"
+               data-zh="每日延时摄影">
+               Tagesablauf im Zeitraffer
+            </a>
+            <a href="?download_video=1" class="button" 
+               data-en="Download Latest Video" 
+               data-de="Neuestes Zeitraffervideo herunterladen"
+               data-it="Scarica l'ultimo video" 
+               data-fr="Télécharger la dernière vidéo"
+               data-zh="下载最新视频">
+               Neuestes Tageszeitraffervideo herunterladen
+            </a>
+        </div>
+        
+        <section class="community-info" style="text-align: center; max-width: 600px; margin: 0 auto;">
+            <h2 data-en="Join Our Community" 
+                data-de="Werden Sie Teil unserer Community"
+                data-it="Unisciti alla nostra comunità"
+                data-fr="Rejoignez notre communauté"
+                data-zh="加入我们的社区">
+                Werden Sie Teil unserer Community
+            </h2>
+            <p data-en="Use our platform to start your own webcam broadcast and share your view of the Zurich landscape with others."
+               data-de="Nutzen Sie unsere Plattform, um Ihre eigene Webcam-Übertragung zu starten und Ihre Sicht auf die Züricher Landschaft mit anderen zu teilen."
+               data-it="Usa la nostra piattaforma per avviare la tua trasmissione webcam e condividere la tua vista sul paesaggio di Zurigo con gli altri."
+               data-fr="Utilisez notre plateforme pour démarrer votre propre diffusion webcam et partager votre vue sur le paysage zurichois avec d'autres."
+               data-zh="使用我们的平台开始您自己的网络摄像头直播，与他人分享您所见的苏黎世风景。">
+               Nutzen Sie unsere Plattform, um Ihre eigene Webcam-Übertragung zu starten und Ihre Sicht auf die Züricher Landschaft mit anderen zu teilen.
+            </p>
+            <p data-en="Become part of our community of weather and nature enthusiasts by contributing your personal livestreams."
+               data-de="Werden Sie Teil unserer Community von Wetter- und Naturbegeisterten, indem Sie Ihre persönlichen Livestreams einbringen."
+               data-it="Diventa parte della nostra comunità di appassionati di meteo e natura contribuendo con i tuoi livestream personali."
+               data-fr="Devenez membre de notre communauté de passionnés de météo et de nature en contribuant avec vos livestreams personnels."
+               data-zh="通过贡献您的个人直播，成为我们天气和自然爱好者社区的一员。">
+               Werden Sie Teil unserer Community von Wetter- und Naturbegeisterten, indem Sie Ihre persönlichen Livestreams einbringen.
+            </p>
+        </section>
+    </div> <!-- container schließen -->
+</section>
+
+<!-- Archive Section AUSSERHALB und NACH der Webcam Section -->
+<section id="archive" class="section">
+    <div class="container">
+        <h2 data-en="Video Archive" 
+            data-de="Videoarchiv" 
+            data-it="Archivio Video" 
+            data-fr="Archives Vidéo" 
+            data-zh="视频档案">
+            Videoarchiv
+        </h2>
+        <?php 
+        $visualCalendar = new VisualCalendarManager('./image/');
+        echo $visualCalendar->displayVisualCalendar();
+        ?>
+    </div>
+</section>
+
+
 
  
 
@@ -1802,7 +2516,28 @@ footer {
 
 
 
-
+<!-- CHAT SECTION - PHP AJAX VERSION -->
+<section id="chat" class="section">
+    <div class="container">
+        <h2 data-en="Live Chat" 
+            data-de="Live Chat" 
+            data-it="Chat dal Vivo" 
+            data-fr="Chat en Direct"
+            data-zh="实时聊天">
+            Live Chat
+        </h2>
+        <div id="chat-container" style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <div id="chat-messages" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; background: #f9f9f9; border-radius: 5px;">
+                <!-- Chat-Nachrichten werden hier angezeigt -->
+            </div>
+            <div id="chat-input-container" style="display: flex; gap: 10px;">
+                <input type="text" id="chat-username" placeholder="Dein Name" style="flex: 0 0 150px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <input type="text" id="chat-message" placeholder="Nachricht eingeben..." style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <button id="chat-send" class="button" style="flex: 0 0 100px;">Senden</button>
+            </div>
+        </div>
+    </div>
+</section>
 
 
 
@@ -2302,8 +3037,8 @@ document.addEventListener('DOMContentLoaded', function() {
     Impressum
 </h2>
 <p>Aurora Wetter Livecam</p>
-<p>A.Gianni</p>
-<p>8340 Hinwil</p>
+<p>M. Kessler</p>
+<p>Dürnten </p>
 <p>Schweiz</p>
 <p 
     data-en="Inquiries via contact form" 
@@ -2317,7 +3052,7 @@ document.addEventListener('DOMContentLoaded', function() {
     data-de="Verantwortlich für den Inhalt: " 
     data-it="Responsabile dei contenuti:  " 
     data-fr="Responsable du contenu : ">
-    Verantwortlich für den Inhalt: A.Janni 
+    
 </p>
 
     </div>
@@ -2354,6 +3089,15 @@ function setLanguage(lang) {
   </script>
 
 
+
+
+
+
+
+
+
+
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const yearSelect = document.getElementById('calendar_year');
@@ -2367,6 +3111,254 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+ <script>
+// PHP AJAX Chat (ersetzt WebSocket)
+document.addEventListener('DOMContentLoaded', function() {
+    const chatMessages = document.getElementById('chat-messages');
+    const chatUsername = document.getElementById('chat-username');
+    const chatMessage = document.getElementById('chat-message');
+    const chatSend = document.getElementById('chat-send');
+    
+    let lastMessageCount = 0;
+    
+    // Nachrichten anzeigen
+    function displayMessage(data) {
+        const messageDiv = document.createElement('div');
+        messageDiv.style.marginBottom = '10px';
+        messageDiv.style.padding = '8px';
+        messageDiv.style.backgroundColor = '#fff';
+        messageDiv.style.borderRadius = '5px';
+        
+        const timestamp = new Date(data.timestamp).toLocaleTimeString('de-CH', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        messageDiv.innerHTML = `
+            <strong>${data.username}:</strong> ${data.message}
+            <small style="float: right; color: #999;">${timestamp}</small>
+        `;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    // Nachrichten laden
+    function loadMessages() {
+        fetch('/chat_ajax.php')
+            .then(response => response.json())
+            .then(messages => {
+                if (messages.length !== lastMessageCount) {
+                    chatMessages.innerHTML = '';
+                    messages.slice(-50).forEach(msg => displayMessage(msg));
+                    lastMessageCount = messages.length;
+                }
+            })
+            .catch(err => console.log('Chat-Fehler:', err));
+    }
+    
+    // Nachricht senden
+    function sendMessage() {
+        const username = chatUsername.value.trim() || 'Anonym';
+        const message = chatMessage.value.trim();
+        
+        if (message) {
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('message', message);
+            
+            fetch('/chat_ajax.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    chatMessage.value = '';
+                    loadMessages(); // Sofort aktualisieren
+                }
+            });
+        }
+    }
+    
+    // Event Listener
+    if (chatSend) {
+        chatSend.addEventListener('click', sendMessage);
+    }
+    
+    if (chatMessage) {
+        chatMessage.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    }
+    
+    // Initial laden und alle 2 Sekunden aktualisieren
+    loadMessages();
+    setInterval(loadMessages, 2000);
+});
+</script>
+
+
+<script>
+function changeMonth(year, month) {
+    if (month < 1) {
+        month = 12;
+        year--;
+    } else if (month > 12) {
+        month = 1;
+        year++;
+    }
+    window.location.href = '?cal_year=' + year + '&cal_month=' + month + '#archive';
+}
+
+function selectDay(year, month, day) {
+    window.location.href = '?cal_year=' + year + '&cal_month=' + month + '&cal_day=' + day + '#archive';
+}
+
+
+
+
+
+
+
+
+
+// Weather Bingo JavaScript
+const bingoData = {
+    challenges: {
+        'rainbow': {de: '🌈 Regenbogen', points: 50},
+        'fog': {de: '🌫️ Nebel', points: 20},
+        'sunrise': {de: '🌅 Sonnenaufgang', points: 30},
+        'sunset': {de: '🌆 Sonnenuntergang', points: 30},
+        'snow': {de: '❄️ Schnee', points: 40},
+        'storm': {de: '⛈️ Gewitter', points: 60},
+        'plane': {de: '✈️ Flugzeug', points: 25},
+        'patrouille': {de: '🇨🇭 Patrouille Suisse', points: 100},
+        'birds': {de: '🦅 Vogelschwarm', points: 15},
+        'fullmoon': {de: '🌕 Vollmond', points: 35}
+    },
+    selectedPredictions: []
+};
+
+function loadDailyChallenges() {
+    const challenges = ['rainbow', 'fog', 'sunrise', 'plane', 'birds']; // Beispiel
+    const container = document.getElementById('challenges-list');
+    
+    container.innerHTML = challenges.map(key => `
+        <div class="challenge-item" data-event="${key}" onclick="toggleChallenge('${key}')">
+            <span>${bingoData.challenges[key].de}</span>
+            <span class="challenge-points">${bingoData.challenges[key].points} Punkte</span>
+        </div>
+    `).join('');
+}
+
+function toggleChallenge(event) {
+    const item = document.querySelector(`[data-event="${event}"]`);
+    if (bingoData.selectedPredictions.includes(event)) {
+        bingoData.selectedPredictions = bingoData.selectedPredictions.filter(e => e !== event);
+        item.classList.remove('selected');
+    } else {
+        if (bingoData.selectedPredictions.length < 3) {
+            bingoData.selectedPredictions.push(event);
+            item.classList.add('selected');
+        } else {
+            alert('Maximal 3 Vorhersagen möglich!');
+        }
+    }
+}
+
+function submitPredictions() {
+    const username = document.getElementById('bingo-username').value || 'Anonym';
+    
+    if (bingoData.selectedPredictions.length === 0) {
+        alert('Bitte wähle mindestens eine Vorhersage!');
+        return;
+    }
+    
+    fetch('weather_bingo.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `action=submit_prediction&username=${username}&predictions[]=${bingoData.selectedPredictions.join('&predictions[]=')}`
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Vorhersage gespeichert! Viel Glück!');
+            loadLeaderboard();
+        }
+    });
+}
+
+function loadLeaderboard() {
+    // Tagesrangliste
+    fetch('weather_bingo.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'action=get_leaderboard&period=today'
+    })
+    .then(r => r.json())
+    .then(data => {
+        const container = document.getElementById('daily-leaderboard');
+        let html = '';
+        let rank = 1;
+        for (const [username, score] of Object.entries(data)) {
+            html += `<div class="leaderboard-entry">
+                <span>${rank}. ${username}</span>
+                <span>${score} Punkte</span>
+            </div>`;
+            rank++;
+            if (rank > 10) break;
+        }
+        container.innerHTML = html || '<p>Noch keine Einträge heute</p>';
+    });
+}
+
+// Initialisierung
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('challenges-list')) {
+        loadDailyChallenges();
+        loadLeaderboard();
+        setInterval(loadLeaderboard, 30000); // Update alle 30 Sekunden
+        
+        document.getElementById('submit-predictions')?.addEventListener('click', submitPredictions);
+    }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 </body>
 </html>
