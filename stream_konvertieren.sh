@@ -1,16 +1,27 @@
 #!/bin/bash
-# stream_konvertieren.sh - Optimiert für FFmpeg 6.1 und kontinuierliches Streaming
+# stream_konvertieren.sh - Mit Uhrzeit-Overlay
 
 # Beim Start alte Dateien aufräumen
 rm -f /var/www/html/segment_*.ts
 rm -f /var/www/html/test_video.m3u8
 
-echo "Starte Stream-Konverter (FFmpeg 6.1)..."
+echo "Starte Stream-Konverter mit Uhrzeit-Overlay..."
 
 while true; do
     ffmpeg -analyzeduration 10M -probesize 10M \
     -rtsp_transport tcp \
     -i "rtsp://aurora:%2B61946194@192.168.1.133:554/videoMain" \
+    -vf "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:\
+text='Aurora Webcam - %{localtime}':\
+x=20:y=20:\
+fontsize=77:\
+fontcolor=white:\
+shadowcolor=black:\
+shadowx=2:\
+shadowy=2:\
+box=1:\
+boxcolor=black@0.5:\
+boxborderw=5" \
     -c:v libx264 \
     -preset veryfast \
     -tune zerolatency \
