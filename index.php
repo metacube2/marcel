@@ -126,20 +126,27 @@ class WebcamManager {
         unlink($outputFile);
         exit;
     }
+// public function getImageFiles() {
+//     // Nur JPG-Dateien aus uploads/, KEINE MP4-Dateien
+//     $imageFiles = glob("uploads/*.{jpg,jpeg,png,gif}", GLOB_BRACE);
+    
+//     // Filtere unerwünschte Dateien aus
+//     $imageFiles = array_filter($imageFiles, function($file) {
+//         $basename = basename($file);
+//         // Blockiere sequence_*.mp4 und andere unerwünschte Dateien
+//         return pathinfo($file, PATHINFO_EXTENSION) !== 'mp4' && 
+//                strpos($basename, 'sequence_') !== 0;
+//     });
+    
+//     return json_encode(array_values($imageFiles));
+// }
 public function getImageFiles() {
-    // Nur JPG-Dateien aus uploads/, KEINE MP4-Dateien
-    $imageFiles = glob("uploads/*.{jpg,jpeg,png,gif}", GLOB_BRACE);
-    
-    // Filtere unerwünschte Dateien aus
-    $imageFiles = array_filter($imageFiles, function($file) {
-        $basename = basename($file);
-        // Blockiere sequence_*.mp4 und andere unerwünschte Dateien
-        return pathinfo($file, PATHINFO_EXTENSION) !== 'mp4' && 
-               strpos($basename, 'sequence_') !== 0;
-    });
-    
-    return json_encode(array_values($imageFiles));
+    // Screenshots aus dem image/ Ordner holen
+    $imageFiles = glob("image/screenshot_*.jpg");
+    rsort($imageFiles); // Neueste zuerst
+    return json_encode($imageFiles);
 }
+
 
 
 
@@ -176,12 +183,12 @@ public function getImageFiles() {
         unlink($outputFile);
         exit;
     }
-    
-
     public function getJavaScript() {
     return "
     document.addEventListener('DOMContentLoaded', function () {
         var video = document.getElementById('webcam-player');
+        video.controls = false;  // Versteckt alle Controls inkl. Play/Pause
+
         var videoSrc = '{$this->videoSrc}';
         
         if (Hls.isSupported()) {
@@ -294,6 +301,7 @@ public function getImageFiles() {
     });
     ";
 }
+
 
 
 
@@ -2513,6 +2521,58 @@ footer {
     </div>
 </section>
 
+<!-- Chat-Regeln Modal -->
+<div id="chat-rules-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-width: 600px; z-index: 10000; max-height: 80vh; overflow-y: auto;">
+    <h2>📋 Nutzungsbedingungen & Chat-Regeln</h2>
+    
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+        <h3>⚠️ Wichtige Verhaltensregeln:</h3>
+        <ul style="line-height: 1.8;">
+            <li><strong>Keine sexuellen, pornografischen oder anzüglichen Inhalte</strong></li>
+            <li><strong>Keine Gewaltdarstellungen oder -androhungen</strong></li>
+            <li><strong>Kein Rassismus, Diskriminierung oder Hassrede</strong></li>
+            <li><strong>Keine persönlichen Daten (Telefonnummern, Adressen) teilen</strong></li>
+            <li><strong>Keine Werbung oder Spam</strong></li>
+            <li><strong>Respektvoller Umgang miteinander</strong></li>
+            <li><strong>Keine illegalen Aktivitäten oder Inhalte</strong></li>
+        </ul>
+    </div>
+    
+    <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0;">
+        <h3>📸 Webcam-Nutzung:</h3>
+        <p>Die Webcam zeigt öffentlichen Raum. Es werden keine Personen gezielt aufgenommen. Die Nutzung erfolgt auf eigene Verantwortung.</p>
+    </div>
+    
+    <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin: 15px 0;">
+        <h3>💬 Chat-Nutzung:</h3>
+        <p>Mit der Nutzung des Chats akzeptieren Sie diese Regeln. Verstöße führen zur sofortigen Sperrung. Chat-Nachrichten werden 24 Stunden gespeichert.</p>
+    </div>
+    
+    <div style="background: #f8d7da; padding: 15px; border-radius: 5px; margin: 15px 0;">
+        <h3>⚖️ Rechtliches:</h3>
+        <p><strong>Haftungsausschluss:</strong> Der Betreiber übernimmt keine Haftung für Inhalte von Nutzern. Jeder Nutzer ist für seine Beiträge selbst verantwortlich.</p>
+        <p><strong>Datenschutz:</strong> Es werden nur technisch notwendige Daten gespeichert (IP-Adresse für 24h zur Missbrauchsprävention).</p>
+    </div>
+    
+    <div style="margin-top: 20px; text-align: center;">
+        <label style="font-size: 16px;">
+            <input type="checkbox" id="accept-rules" style="margin-right: 10px;">
+            <strong>Ich akzeptiere die Nutzungsbedingungen</strong>
+        </label>
+    </div>
+    
+    <div style="margin-top: 20px; text-align: center;">
+        <button onclick="acceptChatRules()" style="background: #4CAF50; color: white; padding: 10px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">
+            Akzeptieren & Chat nutzen
+        </button>
+        <button onclick="declineChatRules()" style="background: #f44336; color: white; padding: 10px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-left: 10px;">
+            Ablehnen
+        </button>
+    </div>
+</div>
+
+<!-- Overlay für Modal -->
+<div id="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;"></div>
 
 
 
@@ -3313,6 +3373,87 @@ function loadLeaderboard() {
     });
 }
 
+//chat agb
+// Chat-Regeln Management
+function checkChatRules() {
+    if (!localStorage.getItem('chatRulesAccepted')) {
+        document.getElementById('chat-rules-modal').style.display = 'block';
+        document.getElementById('modal-overlay').style.display = 'block';
+        document.getElementById('chat-input').disabled = true;
+        document.getElementById('chat-send').disabled = true;
+    }
+}
+
+function acceptChatRules() {
+    if (document.getElementById('accept-rules').checked) {
+        localStorage.setItem('chatRulesAccepted', 'true');
+        localStorage.setItem('rulesAcceptedDate', new Date().toISOString());
+        document.getElementById('chat-rules-modal').style.display = 'none';
+        document.getElementById('modal-overlay').style.display = 'none';
+        document.getElementById('chat-input').disabled = false;
+        document.getElementById('chat-send').disabled = false;
+        
+        // Willkommensnachricht
+        addChatMessage('System', 'Willkommen im Chat! Bitte verhalten Sie sich respektvoll.', true);
+    } else {
+        alert('Bitte akzeptieren Sie die Nutzungsbedingungen, um den Chat zu nutzen.');
+    }
+}
+
+function declineChatRules() {
+    document.getElementById('chat-rules-modal').style.display = 'none';
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('chat-container').innerHTML = 
+        '<div style="padding: 20px; text-align: center; color: #666;">Chat-Nutzung wurde abgelehnt. Bitte laden Sie die Seite neu, wenn Sie den Chat nutzen möchten.</div>';
+}
+
+// Beim Laden prüfen
+document.addEventListener('DOMContentLoaded', function() {
+    checkChatRules();
+    
+    // Regeln alle 30 Tage erneuern
+    const acceptedDate = localStorage.getItem('rulesAcceptedDate');
+    if (acceptedDate) {
+        const daysSince = (new Date() - new Date(acceptedDate)) / (1000 * 60 * 60 * 24);
+        if (daysSince > 30) {
+            localStorage.removeItem('chatRulesAccepted');
+            localStorage.removeItem('rulesAcceptedDate');
+            checkChatRules();
+        }
+    }
+});
+
+// Wort-Filter für unangemessene Inhalte
+const bannedWords = ['sex', 'porn', 'xxx', 'nude']; // Erweitern Sie diese Liste
+
+function filterMessage(message) {
+    let filtered = message.toLowerCase();
+    for (const word of bannedWords) {
+        if (filtered.includes(word)) {
+            return false; // Nachricht blockieren
+        }
+    }
+    return true;
+}
+
+// In der sendMessage Funktion einbauen:
+function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    
+    if (message && filterMessage(message)) {
+        // Nachricht senden
+    } else if (!filterMessage(message)) {
+        alert('Ihre Nachricht enthält unzulässige Inhalte und wurde blockiert.');
+        input.value = '';
+    }
+}
+
+
+
+
+
+
 // Initialisierung
 document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('challenges-list')) {
@@ -3350,6 +3491,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
+<div style="text-align: center; padding: 20px; background: #f5f5f5; margin-top: 50px;">
+    <a href="#" onclick="document.getElementById('chat-rules-modal').style.display='block'; document.getElementById('modal-overlay').style.display='block'; return false;">
+        Nutzungsbedingungen & Chat-Regeln
+    </a> | 
+    <a href="#" onclick="alert('Kontakt: admin@aurora-webcam.ch'); return false;">Kontakt</a> | 
+    <a href="#" onclick="alert('Missbrauch melden: abuse@aurora-webcam.ch'); return false;">Missbrauch melden</a>
+</div>
 
 
 
