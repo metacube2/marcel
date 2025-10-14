@@ -1,3 +1,4 @@
+# rtps_daily_recorder.py
 import os
 import time
 import sys
@@ -7,23 +8,25 @@ import logging
 from pathlib import Path
 try:
     from PIL import Image
+    import numpy as np
 except ImportError:
-    print("PIL nicht installiert. Führen Sie 'pip install Pillow' aus.")
+    print("PIL/numpy nicht installiert. Führen Sie 'pip install Pillow numpy' aus.")
     sys.exit(1)
 
 # Einheitliche Konfiguration
 CONFIG = {
-    "BASE_DIR": "/var/www/html/image/",          # Für RTSP-Screenshots und Videos
-    "RESIZE_DIR": "/var/www/html/images/",        # Für die zu resizenden Bilder
+    "BASE_DIR": "/var/www/html/image/",
+    "RESIZE_DIR": "/var/www/html/images/",
     "RTSP_URL": "rtsp://aurora:%2B61946194@192.168.1.133:88/videoMain",
     "LOG_FILE": "/var/www/html/rtsp-recorder.log",
-    "HOURS_TO_RUN": 24,                          # ✅ 24 Stunden für ein komplettes Tagesvideo
-    "SCREENSHOT_INTERVAL": 33,                    # Alle 33 Sekunden ein Screenshot
+    "HOURS_TO_RUN": 24,
+    "SCREENSHOT_INTERVAL": 33,
     "VIDEO_FPS": 5,
     "VIDEO_RETENTION_DAYS": 7,
     "TARGET_WIDTH": 274,
     "TARGET_HEIGHT": 52,
-    "SCREENSHOTS_PER_HOUR": 109,                  # ✅ Korrekt: 3600/33 = 109
+    "SCREENSHOTS_PER_HOUR": 109,
+    "GREY_THRESHOLD": 20,  # NEU: RGB-Differenz Schwellwert für Grau-Erkennung
 }
 
 # Logging Setup
@@ -65,7 +68,6 @@ class CameraService:
             target_date = datetime.now() - timedelta(days=days_ago)
             date_str = target_date.strftime("%Y%m%d")
             
-            # Prüfe ob Video für diesen Tag existiert
             existing_videos = list(self.base_dir.glob(f"daily_video_{date_str}_*.mp4"))
             
             if not existing_videos:
@@ -74,23 +76,79 @@ class CameraService:
             else:
                 logging.info(f"Video für {date_str} bereits vorhanden: {existing_videos[0].name}")
 
+    def is_grey_image(self, image_path, max_rgb_diff=None):
+        """
+        VERBESSERTE Grau-Erkennung mit RGB-Differenz-Methode
+        Funktioniert auch bei sehr dunklen Bildern!
+        
+        Prüft ob R ≈ G ≈ B für alle Pixel (bei Grau sind RGB-Werte identisch)
+        """
+        if max_rgb_diff is None:
+            max_rgb_diff = CONFIG["GREY_THRESHOLD"]
+            
+        try:
+            img = Image.open(image_path)
+            
+            # Direkter Graustufen-Modus
+            if img.mode == 'L':
+                logging.info(f"✓ Graubild (L-Modus): {image_path.name}")
+                return True
+            
+            # RGB Bild analysieren mit NumPy
+            if img.mode in ('RGB', 'RGBA'):
+                img_rgb = img.convert('RGB')
+                
+                # Resize für Performance (behält Genauigkeit)
+                img_rgb.thumbnail((300, 300), Image.Resampling.LANCZOS)
+                
+                # NumPy Array - vektorisierte Berechnung
+                img_array = np.array(img_rgb, dtype=np.float32)
+                
+                r = img_array[:, :, 0]
+                g = img_array[:, :, 1]
+                b = img_array[:, :, 2]
+                
+                # Berechne maximale Differenz zwischen R, G, B für jeden Pixel
+                diff_rg = np.abs(r - g)
+                diff_gb = np.abs(g - b)
+                diff_rb = np.abs(r - b)
+                
+                max_diff_per_pixel = np.maximum(np.maximum(diff_rg, diff_gb), diff_rb)
+                
+                # Statistiken
+                mean_diff = np.mean(max_diff_per_pixel)
+                p95_diff = np.percentile(max_diff_per_pixel, 95)
+                
+                # ENTSCHEIDUNG: Grau wenn 95% der Pixel RGB-Differenz < Schwellwert haben
+                ist_grau = p95_diff < max_rgb_diff
+                
+                if ist_grau:
+                    logging.info(f"✓ Graubild (P95={p95_diff:.1f}, Mean={mean_diff:.1f}): {image_path.name}")
+                else:
+                    logging.debug(f"✗ Farbig (P95={p95_diff:.1f}, Mean={mean_diff:.1f}): {image_path.name}")
+                
+                return ist_grau
+                
+        except Exception as e:
+            logging.error(f"Fehler bei Graubildprüfung {image_path.name}: {e}")
+            return False
+        
+        return False
+
     def create_video_for_date(self, target_date):
         """Erstellt ein Video für ein spezifisches Datum aus vorhandenen Screenshots"""
         date_str = target_date.strftime("%Y%m%d")
         
-        # Sammle alle Screenshots für diesen Tag
-        start_time = target_date.replace(hour=0, minute=0, second=0)
-        end_time = start_time + timedelta(days=1)
-        
         jpg_files = []
         for jpg in sorted(self.base_dir.glob(f"screenshot_{date_str}_*.jpg")):
-            jpg_files.append(jpg)
+            # Filtere auch hier graue Bilder aus
+            if not self.is_grey_image(jpg):
+                jpg_files.append(jpg)
         
-        if len(jpg_files) < 10:  # Mindestens 10 Bilder für ein sinnvolles Video
+        if len(jpg_files) < 10:
             logging.warning(f"Zu wenige Screenshots für {date_str} ({len(jpg_files)} gefunden)")
             return False
         
-        # Erstelle Video
         timestamp = target_date.strftime("%Y%m%d_%H%M%S")
         output_file = self.base_dir / f"daily_video_{timestamp}.mp4"
         temp_list = Path(f"/tmp/files_{timestamp}.txt")
@@ -198,21 +256,64 @@ class CameraService:
             return False
 
     def create_daily_video(self):
-        """Erstelle ein Video aus den gesammelten Screenshots"""
-        logging.info("Starte Videoerstellung...")
+        """Erstelle ein Video aus den gesammelten Screenshots - LÖSCHE GRAUE BILDER"""
+        logging.info("="*60)
+        logging.info("Starte Videoerstellung mit verbessertem Graufilter...")
+        logging.info("="*60)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = self.base_dir / f"daily_video_{timestamp}.mp4"
         temp_list = Path(f"/tmp/files_{timestamp}.txt")
 
         cutoff_time = datetime.now() - timedelta(hours=CONFIG["HOURS_TO_RUN"])
-        jpg_files = sorted([
+        
+        # Sammle ALLE JPG-Dateien
+        all_jpg_files = sorted([
             f for f in self.base_dir.glob("screenshot_*.jpg")
             if f.stat().st_mtime > cutoff_time.timestamp()
         ])
+        
+        logging.info(f"Gefunden: {len(all_jpg_files)} Screenshots insgesamt")
+        
+        # FILTERE und LÖSCHE graue Bilder
+        jpg_files = []
+        grey_files_to_delete = []
+        
+        for idx, jpg in enumerate(all_jpg_files, 1):
+            if idx % 50 == 0:
+                logging.info(f"  Prüfe Bild {idx}/{len(all_jpg_files)}...")
+                
+            if not self.is_grey_image(jpg):
+                jpg_files.append(jpg)
+            else:
+                grey_files_to_delete.append(jpg)
+        
+        # LÖSCHE alle grauen Bilder
+        for grey_file in grey_files_to_delete:
+            try:
+                grey_file.unlink()
+                logging.info(f"🗑️  Graues Bild gelöscht: {grey_file.name}")
+            except Exception as e:
+                logging.error(f"Fehler beim Löschen von {grey_file.name}: {e}")
+        
+        grey_count = len(grey_files_to_delete)
+        logging.info("")
+        logging.info("="*60)
+        logging.info(f"FILTER-ERGEBNIS:")
+        logging.info(f"  Gute Bilder: {len(jpg_files)}")
+        logging.info(f"  Graue gelöscht: {grey_count}")
+        
+        if len(all_jpg_files) > 0:
+            filter_rate = (grey_count / len(all_jpg_files)) * 100
+            logging.info(f"  Löschrate: {filter_rate:.1f}%")
+            
+            if filter_rate > 50:
+                logging.warning("⚠️  WARNUNG: Über 50% gelöscht - Filter möglicherweise zu strikt!")
+                logging.warning(f"⚠️  Erhöhe GREY_THRESHOLD in CONFIG (aktuell: {CONFIG['GREY_THRESHOLD']})")
+        logging.info("="*60)
 
-        if not jpg_files:
-            logging.warning("Keine Bilder für Video gefunden")
+        if len(jpg_files) < 10:
+            logging.warning(f"Zu wenige Bilder ({len(jpg_files)}) für Video")
             return False
 
         try:
@@ -237,23 +338,14 @@ class CameraService:
             subprocess.run(cmd, check=True, capture_output=True)
             
             if output_file.exists() and output_file.stat().st_size > 0:
-                logging.info(f"Video erstellt: {output_file}")
+                logging.info(f"✓ Video erstellt: {output_file}")
                 
-                # ✅ WICHTIG: Alte Videos NICHT löschen!
-                # Videos bleiben 7 Tage erhalten
-                
-                # Lösche nur die verwendeten JPGs um Platz zu sparen
+                # Lösche nur die GUTEN JPGs (graue wurden schon gelöscht)
                 for jpg in jpg_files:
                     jpg.unlink()
-                logging.info(f"{len(jpg_files)} Screenshots verarbeitet und gelöscht")
+                logging.info(f"✓ {len(jpg_files)} gute Screenshots gelöscht nach Videoerstellung")
                 return True
-            else:
-                logging.error("Neues Video wurde nicht korrekt erstellt")
-                return False
-
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Videoverarbeitung fehlgeschlagen: {e}")
-            return False
+                
         except Exception as e:
             logging.error(f"Fehler bei Videoerstellung: {e}")
             return False
@@ -265,12 +357,6 @@ class CameraService:
         """Lösche alte Video- und Bilddateien (nur älter als 7 Tage)"""
         cutoff_time = datetime.now() - timedelta(days=CONFIG["VIDEO_RETENTION_DAYS"])
         
-        # Lösche nur Videos älter als 7 Tage
-        # for video in self.base_dir.glob("daily_video_*.mp4"):
-        #     if video.stat().st_mtime < cutoff_time.timestamp():
-        #         video.unlink()
-        #         logging.info(f"Altes Video gelöscht (>7 Tage): {video}")
-
         # Lösche verwaiste Screenshots älter als 7 Tage
         for jpg in self.base_dir.glob("screenshot_*.jpg"):
             if jpg.stat().st_mtime < cutoff_time.timestamp():
@@ -287,7 +373,22 @@ class CameraService:
 
 def main():
     service = CameraService()
-    logging.info("Starte Kamera-Service...")
+    logging.info("="*60)
+    logging.info("Starte Kamera-Service mit verbesserter Grau-Erkennung")
+    logging.info(f"Grau-Schwellwert: RGB-Differenz < {CONFIG['GREY_THRESHOLD']}")
+    logging.info("="*60)
+    
+
+    # Warte unbegrenzt bis grey.py fertig ist
+    logging.info("Starte Grau-Filterung (warte auf Abschluss)...")
+    returncode = subprocess.call([sys.executable, "grey.py"])
+    
+    if returncode == 0:
+        logging.info("✓ Grau-Filterung abgeschlossen")
+    else:
+        logging.error(f"✗ Grau-Filterung fehlgeschlagen (Exit-Code: {returncode})")
+    
+
     retry_count = 0
     max_retries = 3
 
@@ -295,12 +396,10 @@ def main():
         if not service.validate_config():
             raise RuntimeError("Ungültige Konfiguration")
 
-        # ✅ NEU: Beim Start prüfen und fehlende Videos erstellen
         service.check_and_create_missing_videos()
 
-        while True:  # Endlosschleife
+        while True:
             service.execution_count = 0
-            # ✅ KORRIGIERT: Verwende SCREENSHOTS_PER_HOUR statt 12
             total_screenshots = CONFIG["HOURS_TO_RUN"] * CONFIG["SCREENSHOTS_PER_HOUR"]
             logging.info(f"Starte neuen 24-Stunden-Zyklus mit {total_screenshots} Screenshots")
             
@@ -320,20 +419,17 @@ def main():
                     time.sleep(60)
                     continue
 
-                # Aufräumen nur alle 100 Screenshots (nicht bei jedem)
                 if service.execution_count % 100 == 0:
                     service.cleanup_old_files()
                 
                 if service.execution_count < total_screenshots:
-                    time.sleep(CONFIG["SCREENSHOT_INTERVAL"])  # 33 Sekunden warten
+                    time.sleep(CONFIG["SCREENSHOT_INTERVAL"])
 
-            # Nach 24 Stunden: Video erstellen
             if service.create_daily_video():
-                logging.info("24-Stunden-Video erfolgreich erstellt")
+                logging.info("✓ 24-Stunden-Video erfolgreich erstellt")
             else:
-                logging.error("Fehler beim Erstellen des Tagesvideos")
+                logging.error("✗ Fehler beim Erstellen des Tagesvideos")
             
-            # ✅ NEU: Nach jedem Zyklus prüfen ob alle Tage Videos haben
             service.check_and_create_missing_videos()
             
             logging.info("Starte neuen 24-Stunden-Zyklus...")
@@ -347,4 +443,9 @@ def main():
         service.cleanup()
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "video":
+        service = CameraService()
+        service.create_daily_video()
+        sys.exit(0)
+    else:
+        main()
