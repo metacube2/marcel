@@ -322,28 +322,34 @@ class CameraService:
                     f.write(f"file '{jpg.absolute()}'\n")
                     f.write(f"duration 0.2\n")
 
+                    # Erstelle Timestamp-Text (z.B. "Oktober 14:25")
+            start_time = cutoff_time.strftime("%d.%m.%Y %H:%M")
+
+
             cmd = [
                 'ffmpeg', '-y',
                 '-f', 'concat',
                 '-safe', '0',
                 '-i', str(temp_list),
                 '-vsync', 'vfr',
+                '-vf', f"drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='{start_time}':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.7:boxborderw=5:x=10:y=h-th-10",
                 '-c:v', 'libx264',
                 '-pix_fmt', 'yuv420p',
                 '-preset', 'fast',
                 '-crf', '23',
                 str(output_file)
             ]
+
             
             subprocess.run(cmd, check=True, capture_output=True)
             
             if output_file.exists() and output_file.stat().st_size > 0:
-                logging.info(f"✓ Video erstellt: {output_file}")
+                logging.info(f"✅ Video erstellt: {output_file}")
                 
                 # Lösche nur die GUTEN JPGs (graue wurden schon gelöscht)
                 for jpg in jpg_files:
                     jpg.unlink()
-                logging.info(f"✓ {len(jpg_files)} gute Screenshots gelöscht nach Videoerstellung")
+                logging.info(f"✅ {len(jpg_files)} gute Screenshots gelöscht nach Videoerstellung")
                 return True
                 
         except Exception as e:
@@ -352,6 +358,7 @@ class CameraService:
         finally:
             if temp_list.exists():
                 temp_list.unlink()
+
 
     def cleanup_old_files(self):
         """Lösche alte Video- und Bilddateien (nur älter als 7 Tage)"""
