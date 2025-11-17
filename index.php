@@ -1,8 +1,11 @@
 <?php
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
+require __DIR__ . '/vendor/autoload.php';
 
 if (isset($_GET['download_video'])) {
-    $videoDir = './image/';
+    $videoDir = './videos/';
     $latestVideo = null;
     $latestTime = 0;
 
@@ -85,11 +88,19 @@ class WebcamManager {
     private $videoSrc = 'test_video.m3u8';
     private $logoPath = 'logo.png';
 
-    public function displayWebcam() {
-        return '<video id="webcam-player" controls autoplay muted></video>';
-	  
-				 
-    }
+ public function displayWebcam() {
+    return '<video id="webcam-player" 
+            autoplay 
+            muted 
+            playsinline 
+            webkit-playsinline 
+            x-webkit-airplay="allow"
+            x5-video-player-type="h5"
+            x5-video-player-fullscreen="true"
+            style="width: 100%; height: 100%; object-fit: contain;">
+        </video>';
+}
+
 	
 	
     public function captureSnapshot() {
@@ -143,7 +154,7 @@ class WebcamManager {
 public function getImageFiles() {
     // Screenshots aus dem image/ Ordner holen
     $imageFiles = glob("image/screenshot_*.jpg");
-    rsort($imageFiles); // Neueste zuerst
+    sort($imageFiles); // Neueste zuerst
     return json_encode($imageFiles);
 }
 
@@ -183,34 +194,56 @@ public function getImageFiles() {
         unlink($outputFile);
         exit;
     }
-    public function getJavaScript() {
+public function getJavaScript() {
     return "
     document.addEventListener('DOMContentLoaded', function () {
         var video = document.getElementById('webcam-player');
-        video.controls = false;  // Versteckt alle Controls inkl. Play/Pause
-
         var videoSrc = '{$this->videoSrc}';
         
-        if (Hls.isSupported()) {
+        // Mobile Detection
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        
+        // Controls NUR auf Desktop verstecken
+        video.controls = false;
+        
+        if (isIOS) {
+            // iOS native HLS
+            video.src = videoSrc;
+            video.setAttribute('playsinline', '');
+            video.setAttribute('webkit-playsinline', '');
+            video.muted = true;
+            
+            video.addEventListener('loadedmetadata', function() {
+                video.play().catch(function(e) {
+                    console.log('iOS Autoplay blockiert');
+                });
+            });
+            
+        } else if (Hls.isSupported()) {
             var hls = new Hls({
-                // WICHTIG: Live-Stream-Einstellungen
-                liveSyncDurationCount: 3,    // Halte 3 Segmente Abstand zum Live-Edge
-                liveMaxLatencyDurationCount: 10, // Max 10 Segmente hinter Live
-                liveDurationInfinity: true,   // Stream hat kein Ende
-                enableWorker: true,
-                lowLatencyMode: false,        // Stabilität vor Latenz
-                backBufferLength: 90,         // 90 Sekunden Back-Buffer
-                maxBufferLength: 60,          // 60 Sekunden Forward-Buffer
-                maxMaxBufferLength: 120,      // Max 120 Sekunden
-                maxBufferSize: 120*1000*1000, // 120MB Buffer
+                // Mobile-optimierte Einstellungen
+                liveSyncDurationCount: isMobile ? 2 : 3,
+                liveMaxLatencyDurationCount: isMobile ? 5 : 10,
+                liveDurationInfinity: true,
+                enableWorker: !isMobile,
+                lowLatencyMode: false,
+                backBufferLength: isMobile ? 30 : 90,
+                maxBufferLength: isMobile ? 30 : 60,
+                maxMaxBufferLength: isMobile ? 60 : 120,
+                maxBufferSize: isMobile ? 60*1000*1000 : 120*1000*1000,
                 
-                // Starlink-Optimierungen
-                manifestLoadingTimeOut: 10000,
-                manifestLoadingMaxRetry: 5,
-                levelLoadingTimeOut: 10000,
-                levelLoadingMaxRetry: 5,
-                fragLoadingTimeOut: 10000,
-                fragLoadingMaxRetry: 5
+                // Mobile-spezifische Timeouts
+                manifestLoadingTimeOut: isMobile ? 20000 : 10000,
+                manifestLoadingMaxRetry: 8,
+                levelLoadingTimeOut: isMobile ? 20000 : 10000,
+                levelLoadingMaxRetry: 8,
+                fragLoadingTimeOut: isMobile ? 20000 : 10000,
+                fragLoadingMaxRetry: 8,
+                
+                // Qualität für Mobile
+                startLevel: isMobile ? 0 : -1,
+                abrEwmaDefaultEstimate: isMobile ? 500000 : 1000000
             });
             
             hls.loadSource(videoSrc);
@@ -219,27 +252,20 @@ public function getImageFiles() {
             hls.on(Hls.Events.MANIFEST_PARSED, function () {
                 console.log('Stream geladen');
                 
-                // WICHTIG: Springe zum Live-Edge minus 60 Sekunden
+                if (isMobile) {
+                    video.muted = true;
+                }
+                
+                // Live-Position anpassen
                 if (hls.liveSyncPosition !== null) {
                     var targetPosition = hls.liveSyncPosition - 60;
-                    console.log('Setze Position auf: ' + targetPosition + ' (60s vor Live)');
+                    console.log('Setze Position auf: ' + targetPosition);
                     video.currentTime = targetPosition;
                 }
                 
                 video.play().catch(function(e) {
                     console.log('Autoplay blockiert');
                 });
-            });
-            
-            // Überwache den Live-Sync
-            hls.on(Hls.Events.LEVEL_UPDATED, function(event, data) {
-                console.log('Stream aktualisiert, neue Segmente verfügbar');
-                
-                // Wenn wir zu weit zurückfallen, springe vor
-                if (video.currentTime < hls.liveSyncPosition - 120) {
-                    console.log('Zu weit zurück, springe näher zum Live-Edge');
-                    video.currentTime = hls.liveSyncPosition - 60;
-                }
             });
             
             // Fehlerbehandlung
@@ -265,35 +291,11 @@ public function getImageFiles() {
                 }
             });
             
-            // Automatisches Nachladen erzwingen
-            setInterval(function() {
-                if (!video.paused && !video.seeking) {
-                    // Prüfe ob neue Segmente verfügbar sind
-                    if (hls.levels && hls.levels.length > 0) {
-                        var level = hls.levels[hls.currentLevel];
-                        if (level && level.details && level.details.live) {
-                            console.log('Live-Stream läuft, Edge bei: ' + level.details.edge);
-                            
-                            // Wenn wir am Ende sind, lade neue Segmente
-                            var bufferEnd = 0;
-                            if (video.buffered.length > 0) {
-                                bufferEnd = video.buffered.end(video.buffered.length - 1);
-                            }
-                            
-                            if (bufferEnd - video.currentTime < 10) {
-                                console.log('Buffer niedrig, lade neue Segmente...');
-                                hls.startLoad();
-                            }
-                        }
-                    }
-                }
-            }, 5000); // Alle 5 Sekunden prüfen
-            
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // Safari/iOS Fallback
+            // Fallback für andere Browser
             video.src = videoSrc;
+            video.muted = true;
             video.addEventListener('loadedmetadata', function () {
-                // Für Safari: Setze currentTime zurück für Pseudo-DVR
                 video.currentTime = Math.max(0, video.duration - 60);
                 video.play();
             });
@@ -301,6 +303,7 @@ public function getImageFiles() {
     });
     ";
 }
+
 
 
 
@@ -325,7 +328,7 @@ class VisualCalendarManager {
     private $videoDir;
     private $monthNames;
     
-    public function __construct($videoDir = './image/') {
+    public function __construct($videoDir = './videos/') {
         $this->videoDir = $videoDir;
         $this->monthNames = [
             1 => ['de' => 'Januar', 'en' => 'January', 'it' => 'Gennaio', 'fr' => 'Janvier', 'zh' => '一月'],
@@ -575,56 +578,291 @@ public function displayEntries($isAdmin = false) {
     
 }
 
+
 class ContactManager {
+    //private $adminEmail = 'ingo.kohler.zh@gmail.com';  // ← Empfänger
+    private $adminEmail = 'metacube@gmail.com';  // ← Empfänger
+    private $feedbackFile = 'feedbacks.json';
+    private $gmailUser = 'metacube@gmail.com';  // ← DEINE GMAIL-ADRESSE
+    private $gmailAppPassword = 'qggk hsxz fdkq jgxa';  // ← APP-PASSWORT VON GMAIL
+    
     public function displayForm() {
         return '
-        <form method="post">
+        <form method="post" id="contact-form">
             <input type="hidden" name="contact" value="1">
-           <label for="name" 
-       data-en="Name:" 
-       data-de="Name:" 
-       data-it="Nome:" 
-       data-fr="Nom:">
-    Name:
-</label>
-<input type="text" id="name" name="name" required>
-<label for="email" 
-       data-en="E-Mail:" 
-       data-de="E-Mail:" 
-       data-it="Email:" 
-       data-fr="E-mail:">
-    E-Mail:
-</label>
-<input type="email" id="email" name="email" required>
-<label for="message" 
-       data-en="Message:" 
-       data-de="Nachricht:" 
-       data-it="Messaggio:" 
-       data-fr="Message:">
-    Nachricht:
-</label>
-<textarea id="message" name="message" required></textarea>
-<button type="submit" 
-        data-en="Send Message" 
-        data-de="Nachricht senden" 
-        data-it="Invia Messaggio" 
-        data-fr="Envoyer le message">
-    Nachricht senden
-</button>
-
-        </form>';
+            <label for="name" 
+                   data-en="Name:" 
+                   data-de="Name:" 
+                   data-it="Nome:" 
+                   data-fr="Nom:"
+                   data-zh="姓名：">
+                Name:
+            </label>
+            <input type="text" id="name" name="name" required minlength="2">
+            
+            <label for="email" 
+                   data-en="E-Mail:" 
+                   data-de="E-Mail:" 
+                   data-it="Email:" 
+                   data-fr="E-mail:"
+                   data-zh="电子邮件：">
+                E-Mail:
+            </label>
+            <input type="email" id="email" name="email" required>
+            
+            <label for="message" 
+                   data-en="Message:" 
+                   data-de="Nachricht:" 
+                   data-it="Messaggio:" 
+                   data-fr="Message:"
+                   data-zh="消息：">
+                Nachricht:
+            </label>
+            <textarea id="message" name="message" required minlength="10"></textarea>
+            
+            <button type="submit" 
+                    data-en="Send Message" 
+                    data-de="Nachricht senden" 
+                    data-it="Invia Messaggio" 
+                    data-fr="Envoyer le message"
+                    data-zh="发送消息">
+                Nachricht senden
+            </button>
+        </form>
+        <div id="contact-feedback" style="margin-top: 15px;"></div>';
     }
 
     public function handleSubmission($name, $email, $message) {
+        // Validierung
+        if (empty($name) || empty($email) || empty($message)) {
+            return [
+                'success' => false, 
+                'message' => 'Alle Felder sind erforderlich'
+            ];
+        }
+        
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return [
+                'success' => false, 
+                'message' => 'Ungültige E-Mail-Adresse'
+            ];
+        }
+        
+        if (strlen($message) < 10) {
+            return [
+                'success' => false, 
+                'message' => 'Nachricht zu kurz (mindestens 10 Zeichen)'
+            ];
+        }
+        
+        // Sanitize
+        $name = htmlspecialchars(trim($name), ENT_QUOTES, 'UTF-8');
+        $email = filter_var(trim($email), FILTER_SANITIZE_EMAIL);
+        $message = htmlspecialchars(trim($message), ENT_QUOTES, 'UTF-8');
+        
+        // Feedback speichern
         $feedback = [
             'name' => $name,
             'email' => $email,
             'message' => $message,
-            'date' => date('Y-m-d H:i:s')
+            'date' => date('Y-m-d H:i:s'),
+            'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
         ];
-        $feedbacks = json_decode(file_get_contents('feedbacks.json') ?: '[]', true);
+        
+        $feedbacks = file_exists($this->feedbackFile) 
+            ? json_decode(file_get_contents($this->feedbackFile), true) 
+            : [];
+        
+        if (!is_array($feedbacks)) {
+            $feedbacks = [];
+        }
+        
         $feedbacks[] = $feedback;
-        file_put_contents('feedbacks.json', json_encode($feedbacks));
+        file_put_contents($this->feedbackFile, json_encode($feedbacks, JSON_PRETTY_PRINT));
+        
+        // E-MAIL SENDEN MIT GMAIL SMTP
+        $mailSent = $this->sendEmailViaGmail($name, $email, $message, $feedback['date'], $feedback['ip']);
+        
+        if ($mailSent) {
+            return [
+                'success' => true, 
+                'message' => 'Vielen Dank! Ihre Nachricht wurde gesendet.'
+            ];
+        } else {
+            error_log("Mail-Fehler: Nachricht von {$email} konnte nicht gesendet werden");
+            return [
+                'success' => false, 
+                'message' => 'Nachricht wurde gespeichert, aber E-Mail konnte nicht gesendet werden.'
+            ];
+        }
+    }
+    
+    private function sendEmailViaGmail($name, $email, $message, $date, $ip) {
+        $mail = new PHPMailer(true);
+        
+
+    try {
+            // DEBUG-MODUS AKTIVIEREN
+            $mail->SMTPDebug = 2;
+            $mail->Debugoutput = function($str, $level) {
+                error_log("PHPMailer Debug: $str");
+            };
+            
+            // SMTP Konfiguration
+            $mail->isSMTP();
+            $mail->Host = 'smtp.gmail.com';
+            $mail->SMTPAuth = true;
+            $mail->Username = $this->gmailUser;  // metacube@gmail.com
+            $mail->Password = $this->gmailAppPassword;  // qggk hsxz fdkq jgxa
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port = 587;
+
+
+ 
+            
+            // Absender & Empfänger
+            $mail->setFrom($this->gmailUser, 'Aurora Livecam');
+            $mail->addAddress($this->adminEmail);  // admin@aurora-live-weathercam.com
+            $mail->addReplyTo($email, $name);
+            
+            // Inhalt
+            $mail->isHTML(true);
+            $mail->CharSet = 'UTF-8';
+            $mail->Subject = '🔔 Neue Kontaktanfrage von ' . $name;
+            $mail->Body = $this->getEmailTemplate($name, $email, $message, $date, $ip);
+            
+            $mail->send();
+            return true;
+        } catch (Exception $e) {
+            error_log("PHPMailer Error: {$mail->ErrorInfo}");
+            return false;
+        }
+    }
+    
+    private function getEmailTemplate($name, $email, $message, $date, $ip) {
+        return "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='UTF-8'>
+            <style>
+                body { 
+                    font-family: Arial, sans-serif; 
+                    line-height: 1.6; 
+                    color: #333;
+                    background-color: #f4f4f4;
+                    margin: 0;
+                    padding: 0;
+                }
+                .container { 
+                    max-width: 600px; 
+                    margin: 20px auto; 
+                    background: white;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                }
+                .header { 
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    color: white; 
+                    padding: 30px 20px; 
+                    text-align: center;
+                }
+                .header h2 {
+                    margin: 0;
+                    font-size: 24px;
+                }
+                .content { 
+                    padding: 30px 20px;
+                }
+                .info-box {
+                    background: #f9f9f9;
+                    border-left: 4px solid #667eea;
+                    padding: 15px;
+                    margin: 15px 0;
+                    border-radius: 5px;
+                }
+                .info-box strong {
+                    color: #667eea;
+                    display: block;
+                    margin-bottom: 5px;
+                }
+                .message-box {
+                    background: white;
+                    border: 1px solid #e0e0e0;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 5px;
+                    line-height: 1.8;
+                }
+                .footer { 
+                    background: #f9f9f9;
+                    padding: 20px; 
+                    text-align: center;
+                    font-size: 12px; 
+                    color: #999;
+                    border-top: 1px solid #e0e0e0;
+                }
+                .button {
+                    display: inline-block;
+                    padding: 12px 30px;
+                    background: #4CAF50;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    margin: 15px 0;
+                    font-weight: bold;
+                }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h2>📧 Neue Kontaktanfrage</h2>
+                    <p style='margin: 10px 0 0 0; opacity: 0.9;'>Aurora Weather Livecam</p>
+                </div>
+                
+                <div class='content'>
+                    <div class='info-box'>
+                        <strong>👤 Name:</strong>
+                        {$name}
+                    </div>
+                    
+                    <div class='info-box'>
+                        <strong>📧 E-Mail:</strong>
+                        <a href='mailto:{$email}' style='color: #667eea;'>{$email}</a>
+                    </div>
+                    
+                    <div class='info-box'>
+                        <strong>💬 Nachricht:</strong>
+                    </div>
+                    
+                    <div class='message-box'>
+                        " . nl2br($message) . "
+                    </div>
+                    
+                    <div style='text-align: center; margin: 30px 0;'>
+                        <a href='mailto:{$email}' class='button'>
+                            ↩️ Direkt antworten
+                        </a>
+                    </div>
+                </div>
+                
+                <div class='footer'>
+                    <p><strong>📅 Gesendet am:</strong> {$date}</p>
+                    <p><strong>🌐 IP-Adresse:</strong> {$ip}</p>
+                    <p style='margin-top: 15px;'>
+                        Diese E-Mail wurde automatisch vom Kontaktformular auf<br>
+                        <a href='https://www.aurora-live-weathercam.com' style='color: #667eea;'>
+                            www.aurora-live-weathercam.com
+                        </a> generiert.
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
     }
 }
 
@@ -634,7 +872,7 @@ class AdminManager {
     }
     public function handleLogin($username, $password) {
         echo "Login-Versuch: Username = $username, Passwort = $password"; // Debugging
-        if ($username === 'admin' && $password === 'sonne4000') {
+        if ($username === 'admin' && $password === 'sonne4000$$$$Q') {
             $_SESSION['admin'] = true;
             return true;
         }
@@ -780,7 +1018,7 @@ class VideoArchiveManager {
     private $videoDir;
     private $monthNames;
     
-    public function __construct($videoDir = './image/') {
+    public function __construct($videoDir = './videos/') {
         $this->videoDir = $videoDir;
         $this->monthNames = [
             '01' => 'Januar',
@@ -979,7 +1217,7 @@ $contactManager = new ContactManager();
 $adminManager = new AdminManager();
 
 // Nach den anderen Manager-Instanzen hinzufügen
-$videoArchiveManager = new VideoArchiveManager('./image/');
+$videoArchiveManager = new VideoArchiveManager('./videos/');
 
 // Video-Download-Handler nach dem existierenden Download-Handler hinzufügen
 $videoArchiveManager->handleSpecificVideoDownload();
@@ -1019,8 +1257,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['guestbook'])) {
         $guestbookManager->handleFormSubmission();
-    } elseif (isset($_POST['contact'])) {
-        $contactManager->handleSubmission($_POST['name'], $_POST['email'], $_POST['message']);
+   } elseif (isset($_POST['contact'])) {
+    $result = $contactManager->handleSubmission($_POST['name'], $_POST['email'], $_POST['message']);
+    
+    // JSON-Response für AJAX
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json');
+        echo json_encode($result);
+        exit;
+    }
+    
+    // Normale Formular-Submission
+    $_SESSION['contact_result'] = $result;
+    header('Location: ' . $_SERVER['PHP_SELF'] . '#kontakt');
+    exit;
+
     } elseif (isset($_POST['admin-login'])) {
         $adminManager->handleLogin($_POST['username'], $_POST['password']);
     } elseif (isset($_POST['update-social-media'])) {
@@ -1072,6 +1324,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     padding: 20px;
     box-shadow: 0 5px 20px rgba(0,0,0,0.1);
 }
+
+
+
+#timelapse-time-overlay {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 18px;
+    font-weight: bold;
+    z-index: 100;
+    font-family: monospace;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+
 
 .calendar-navigation {
     display: flex;
@@ -1192,6 +1462,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         transform: translateY(0);
     }
 }
+
+
+/* Mobile Video Optimierungen */
+@media (max-width: 768px) {
+    .video-container {
+        position: relative;
+        padding-bottom: 56.25%;
+        height: 0;
+        overflow: hidden;
+    }
+    
+    #webcam-player {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-playsinline: true;
+    }
+}
+
+/* iOS-spezifische Fixes */
+@supports (-webkit-touch-callout: none) {
+    #webcam-player {
+        -webkit-playsinline: true;
+        -webkit-video-playable-inline: true;
+    }
+}
+
+
+
+
 
 .day-videos h4 {
     color: #333;
@@ -1814,12 +2118,22 @@ label {
 .modal-content {
     margin: auto;
     display: block;
-    width: 80%;
-    max-width: 700px;
-    max-height: 80vh;
-    object-fit: contain;
+    width: 95vw;           /* 95% Viewport-Breite */
+    max-width: none;       /* Keine Begrenzung */
+    max-height: 90vh;      /* 90% Viewport-Höhe */
+    object-fit: contain;   /* Seitenverhältnis beibehalten */
     border-radius: 5px;
 }
+
+/* Mobile Optimierung */
+@media (max-width: 768px) {
+    .modal-content {
+        width: 98vw;
+        max-height: 85vh;
+        touch-action: pinch-zoom; /* Zoom/Pinch erlauben */
+    }
+}
+
 
 #caption {
     margin: 15px auto;
@@ -2100,6 +2414,10 @@ footer {
 </div>
 
     <header>
+  <link rel="prefetch" href="chat.php">  
+
+    
+    
         <div class="container">
 
         <div class="logo">
@@ -2120,17 +2438,10 @@ footer {
     </a>
 </li>
 
-<li>
-    <a href="#chat" 
-       data-en="Aurora-Chat" 
-       data-de="Aurora-Chat" 
-       data-it="CAurora-hat" 
-       data-fr="Aurora-Chat"
-       data-zh="聊天">
-        Chat
-    </a>
-</li>
-
+<!-- <a href="chat.php" target="_blank" style="color: #667eea; font-weight: bold;">
+    💬 Private Chat
+</a>
+-->
 
 
 
@@ -2153,6 +2464,10 @@ footer {
         Kontakt
     </a>
 </li>
+
+
+
+
 <li>
     <a href="#gallery" 
        data-en="Gallery" 
@@ -2166,11 +2481,11 @@ footer {
 <li>
     <a href="#archive" 
        data-en="Video Archive" 
-       data-de="Videoarchiv" 
+       data-de="Videoarchiv (Tagesvideos)" 
        data-it="Archivio Video" 
        data-fr="Archives Vidéo"
        data-zh="视频档案">
-        Videoarchiv
+        Videoarchiv Tagesvideos 
     </a>
     </li>
 
@@ -2231,7 +2546,7 @@ footer {
                 $advertisements = [
                      
 																																
-                   // ['name' => 'AWZ Uster', 'url' => 'https://www.azw.info/', 'img' => 'awz.png'],
+                   ['name' => 'Pizza for You', 'url' => 'https://pizzaforyou.ch//', 'img' => 'pizza.png'],
                    // ['name' => 'Swisscom', 'url' => 'https://www.swisscom.ch/', 'img' => 'images/swisscom.png'],
                   //  ['name' => 'Sunrise Wetteralarm', 'url' => 'https://www.bing.com/ck/nZQ&ntb=1', 'img' => 'images/sunrisealert.png'],
                   //  ['name' => 'Carvolution', 'url' => 'https://www.carvolution.ch/', 'img' => 'images/carvolution.png'],
@@ -2271,68 +2586,7 @@ footer {
 </div>
 
 
-
-
-
-<!-- WEATHER BINGO SECTION -->
-<!-- <section id="weather-bingo" class="section">
-    <div class="container">
-        <h2 data-en="Weather Bingo" 
-            data-de="Wetter-Bingo" 
-            data-it="Bingo Meteo" 
-            data-fr="Bingo Météo">
-            🎮 Wetter-Bingo
-        </h2>
-        
-         <div class="bingo-container">
-             Tägliche Challenges -->
-            <!--  <div class="daily-challenges">
-                <h3>🎯 Heutige Challenges</h3>
-                <div id="challenges-list"></div>
-                <div class="prediction-form">
-                    <input type="text" id="bingo-username" placeholder="Dein Name" />
-                    <button id="submit-predictions" onclick="submitPredictions()" class="button">Vorhersage abgeben</button>
-
-                </div>
-            </div>
-            
-             
-            <div class="leaderboard-container">
-                <h3>🏆 Tagesrangliste</h3>
-                <div id="daily-leaderboard"></div>
-                
-                <h3>👑 Monatsrangliste</h3>
-                <div id="monthly-leaderboard"></div>
-            </div> -->
-            
-  <!-- Event Verification (Admin only) -->
-<?php if ($adminManager->isAdmin()): ?>
-<div class="event-verification" style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
-    <h3>✅ Heutige Events bestätigen (Admin)</h3>
-    <p>Klicke auf die Events, die heute eingetreten sind:</p>
-    <div id="verify-buttons">
-        <?php 
-        $todaysChallenges = $weatherBingo->getTodaysChallenges();
-        foreach ($todaysChallenges as $event): 
-        ?>
-        <button onclick="verifyBingoEvent('<?php echo $event; ?>')" 
-                class="button verify-btn" 
-                data-event="<?php echo $event; ?>"
-                style="margin: 5px;">
-            <?php 
-            $challenges = $weatherBingo->challenges;
-            echo $challenges[$event]['de'] . ' (' . $challenges[$event]['points'] . ' Punkte)';
-            ?>
-        </button>
-        <?php endforeach; ?>
-    </div>
-    <div id="verify-status" style="margin-top: 10px; color: green;"></div>
-</div>
-<?php endif; ?>
-
-        </div>
-    </div>
-</section>
+ 
 
 
 
@@ -2347,7 +2601,7 @@ footer {
             </div>
         </div> <!-- video-container schließen -->
         
-        <div class="webcam-controls" style="text-align: center;">
+        <div class="webcam-controls" style="text-align: left;">
             <a href="?action=snapshot" class="button" 
                data-en="Save Snapshot" 
                data-de="Snapshot speichern"
@@ -2356,21 +2610,14 @@ footer {
                data-zh="保存快照">
                Snapshot speichern
             </a>
-            <a href="?action=sequence" class="button" 
-               data-en="Save Video Clip" 
-               data-de="Videoclip speichern"
-               data-it="Salva Clip Video"
-               data-fr="Sauvegarder Clip Vidéo"
-               data-zh="保存视频剪辑">
-               Videoclip speichern
-            </a>
+
             <a href="#" class="button" id="timelapse-button" 
-               data-en="Daily Timelapse" 
-               data-de="Tagesablauf im Zeitraffer"
+               data-en="Week Timelapse" 
+               data-de="Wochenzeitraffer"
                data-it="Timelapse Giornaliero" 
                data-fr="Timelapse Quotidien"
                data-zh="每日延时摄影">
-               Tagesablauf im Zeitraffer
+               Wochenzeitraffer
             </a>
             <a href="?download_video=1" class="button" 
                data-en="Download Latest Video" 
@@ -2404,22 +2651,45 @@ footer {
                data-zh="通过贡献您的个人直播，成为我们天气和自然爱好者社区的一员。">
                Werden Sie Teil unserer Community von Wetter- und Naturbegeisterten, indem Sie Ihre persönlichen Livestreams einbringen.
             </p>
+
+
+
+    <!-- STARLINK ERGÄNZUNG -->
+    <div style="margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 10px;">
+        <h3 style="color: white; margin-bottom: 15px;">
+            🛰️ Schnelles Internet für Ihre Livestreams
+        </h3>
+        <p style="color: white; margin-bottom: 15px;">
+            Für hochwertige Webcam-Übertragungen empfehlen wir Starlink - 
+            Highspeed-Internet überall verfügbar, perfekt für abgelegene Standorte!
+        </p>
+        <a href="https://www.starlink.com/" target="_blank" style="display: inline-block;">
+            <img src="starlink.png" alt="Starlink - Schnelles Internet überall" 
+                 style="max-width: 200px; height: auto; border-radius: 5px; box-shadow: 0 3px 10px rgba(0,0,0,0.3);">
+        </a>
+
+
+
+
         </section>
     </div> <!-- container schließen -->
 </section>
 
+ 
+
+
 <!-- Archive Section AUSSERHALB und NACH der Webcam Section -->
 <section id="archive" class="section">
     <div class="container">
-        <h2 data-en="Video Archive" 
-            data-de="Videoarchiv" 
+        <h2 data-en="Video Archive (Daily Videos 12h)" 
+            data-de="Videoarchiv Tagesvideos" 
             data-it="Archivio Video" 
             data-fr="Archives Vidéo" 
             data-zh="视频档案">
-            Videoarchiv
+            Videoarchiv Tagesvideos  
         </h2>
         <?php 
-        $visualCalendar = new VisualCalendarManager('./image/');
+        $visualCalendar = new VisualCalendarManager('./videos/');
         echo $visualCalendar->displayVisualCalendar();
         ?>
     </div>
@@ -2454,11 +2724,11 @@ footer {
    Videoclip speichern
 </a>
 <a href="#" class="button" id="timelapse-button" 
-   data-en="Daily Timelapse" 
-   data-de="Tagesablauf im Zeitraffer"
+   data-en="Week Timelapse" 
+   data-de="Wochenzeitraffer"
    data-it="Timelapse Giornaliero" 
    data-fr="Timelapse Quotidien">
-   Tagesablauf im Zeitraffer
+   Wochenzeitraffer
 </a>
 
     <!-- Bestehende Buttons hier -->
@@ -2576,7 +2846,7 @@ footer {
 
 
 
-<!-- CHAT SECTION - PHP AJAX VERSION -->
+<!-- CHAT SECTION - PHP AJAX VERSION
 <section id="chat" class="section">
     <div class="container">
         <h2 data-en="Live Chat" 
@@ -2588,7 +2858,7 @@ footer {
         </h2>
         <div id="chat-container" style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
             <div id="chat-messages" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; background: #f9f9f9; border-radius: 5px;">
-                <!-- Chat-Nachrichten werden hier angezeigt -->
+                Chat-Nachrichten werden hier angezeigt  
             </div>
             <div id="chat-input-container" style="display: flex; gap: 10px;">
                 <input type="text" id="chat-username" placeholder="Dein Name" style="flex: 0 0 150px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
@@ -2598,7 +2868,7 @@ footer {
         </div>
     </div>
 </section>
-
+ -->
 
 
 
@@ -2717,7 +2987,7 @@ footer {
                 <a href="#webcams">Webcam</a>
                 <a href="#guestbook">Gästebuch</a>
                 <a href="#kontakt">Kontakt</a>
-
+ 
                 <a href="#gallery">Galerie</a>
                 <a href="#impressum">Impressum</a>
 
@@ -2863,6 +3133,100 @@ document.addEventListener('DOMContentLoaded', function() {
 							  
     });
 
+// ========== ADMIN TOGGLE FÜR SUNRISE/SUNSET SECTION ==========
+(function() {
+    const adminToggleKey = 'sunriseSunsetAdminVisible';
+    
+    // Admin-Status aus localStorage laden
+    let isVisible = localStorage.getItem(adminToggleKey) !== 'false';
+    
+    // Toggle-Button erstellen
+    function createToggleButton() {
+        const section = document.getElementById('sunrise-sunset');
+        if (!section) {
+            console.log('❌ Section #sunrise-sunset nicht gefunden');
+            return;
+        }
+        
+        const toggleBtn = document.createElement('button');
+        toggleBtn.id = 'sunrise-sunset-toggle';
+        toggleBtn.innerHTML = isVisible ? '👁️ Ausblenden' : '👁️‍🗨️ Einblenden';
+        toggleBtn.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+        `;
+        
+        toggleBtn.addEventListener('mouseenter', function() {
+            this.style.transform = 'scale(1.1)';
+        });
+        
+        toggleBtn.addEventListener('mouseleave', function() {
+            this.style.transform = 'scale(1)';
+        });
+        
+        toggleBtn.addEventListener('click', function() {
+            isVisible = !isVisible;
+            localStorage.setItem(adminToggleKey, isVisible);
+            updateVisibility();
+            this.innerHTML = isVisible ? '👁️ Ausblenden' : '👁️‍🗨️ Einblenden';
+            console.log('✅ Sichtbarkeit geändert:', isVisible);
+        });
+        
+        document.body.appendChild(toggleBtn);
+        console.log('✅ Toggle-Button erstellt');
+    }
+    
+    // Sichtbarkeit aktualisieren
+    function updateVisibility() {
+        const section = document.getElementById('sunrise-sunset');
+        if (section) {
+            section.style.display = isVisible ? 'block' : 'none';
+            console.log('✅ Section Sichtbarkeit:', isVisible ? 'sichtbar' : 'versteckt');
+        }
+    }
+    
+    // Button IMMER erstellen (keine PHP-Bedingung)
+    createToggleButton();
+    updateVisibility();
+})();
+// ========== ENDE ADMIN TOGGLE ==========
+
+
+
+let currentImageIndex = 0;
+const galleryImages = Array.from(document.querySelectorAll('#gallery-images img'));
+
+document.addEventListener('keydown', function(e) {
+    if (modal.style.display === 'block') {
+        if (e.key === 'ArrowRight') showNextImage();
+        if (e.key === 'ArrowLeft') showPrevImage();
+        if (e.key === 'Escape') modal.style.display = 'none';
+    }
+});
+
+function showNextImage() {
+    currentImageIndex = (currentImageIndex + 1) % galleryImages.length;
+    modalImg.src = galleryImages[currentImageIndex].src;
+}
+
+function showPrevImage() {
+    currentImageIndex = (currentImageIndex - 1 + galleryImages.length) % galleryImages.length;
+    modalImg.src = galleryImages[currentImageIndex].src;
+}
+
+
+
     function toggleTimelapse() {
         if (timelapseViewer.style.display === 'none') {
             timelapseViewer.style.display = 'block';
@@ -2875,7 +3239,7 @@ document.addEventListener('DOMContentLoaded', function() {
             stopTimelapse();
             timelapseViewer.style.display = 'none';
             webcamPlayer.style.display = 'block';
-            timelapseButton.textContent = 'Tageszeitraffer anzeigen';
+            timelapseButton.textContent = 'Wochenzeitraffer';
 																		   
         }
     }
@@ -2900,6 +3264,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 const currentImage = imageFiles[currentImageIndex];
                 console.log(`Verarbeite Bild: ${currentImage}`);
                 
+        const filename = currentImage.split('/').pop();
+                const timeMatch = filename.match(/screenshot_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+                if (timeMatch) {
+                    const [_, year, month, day, hour, minute, second] = timeMatch;
+                    const dateStr = `${day}.${month}.${year} ${hour}:${minute}:${second}`;
+                    
+                    // Zeit-Overlay erstellen oder aktualisieren
+                    let timeOverlay = document.getElementById('timelapse-time-overlay');
+                    if (!timeOverlay) {
+                        timeOverlay = document.createElement('div');
+                        timeOverlay.id = 'timelapse-time-overlay';
+                        timeOverlay.style.cssText = `
+                            position: absolute;
+                            top: 20px;
+                            left: 20px;
+                            background: rgba(0,0,0,0.7);
+                            color: white;
+                            padding: 10px 15px;
+                            border-radius: 5px;
+                            font-size: 18px;
+                            font-weight: bold;
+                            z-index: 100;
+                            font-family: monospace;
+                        `;
+                        document.getElementById('timelapse-viewer').appendChild(timeOverlay);
+                    }
+                    timeOverlay.textContent = dateStr;
+                }
+
+
                 // Lazy Loading
                 for (let i = currentImageIndex; i < currentImageIndex + preloadBuffer && i < imageFiles.length; i++) {
                     if (!imageCache.has(imageFiles[i])) {
@@ -3259,6 +3653,89 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 
+
+
+
+ <!-- AMBIENT SYNTHESIZER - VOR </body> -->
+<script>
+// Ambient Hintergrundmusik - Autostart
+(function() {
+    let audioContext;
+    let masterGain;
+    let isPlaying = false;
+    
+    function initAudio() {
+        if (audioContext) return;
+        
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = 0.2; // 20% Lautstärke
+        masterGain.connect(audioContext.destination);
+        
+        playAmbientLoop();
+        isPlaying = true;
+    }
+    
+    function playAmbientLoop() {
+        if (!isPlaying) return;
+        
+        // Zufällige tiefe Frequenz (80-200 Hz)
+        const baseFreq = 80 + Math.random() * 120;
+        const duration = 3 + Math.random() * 4; // 3-7 Sekunden pro Ton
+        
+        // Oszillator erstellen
+        const osc = audioContext.createOscillator();
+        const oscGain = audioContext.createGain();
+        
+        // Tiefe Sinuswelle
+        osc.type = 'sine';
+        osc.frequency.value = baseFreq;
+        
+        // Sanftes Ein- und Ausblenden
+        const now = audioContext.currentTime;
+        oscGain.gain.setValueAtTime(0, now);
+        oscGain.gain.linearRampToValueAtTime(0.3, now + 1); // 1s Fade-In
+        oscGain.gain.setValueAtTime(0.3, now + duration - 1);
+        oscGain.gain.linearRampToValueAtTime(0, now + duration); // 1s Fade-Out
+        
+        // Verbinden
+        osc.connect(oscGain);
+        oscGain.connect(masterGain);
+        
+        // Starten und Stoppen
+        osc.start(now);
+        osc.stop(now + duration);
+        
+        // Nächsten Ton planen (mit 0.5-2s Pause)
+        const pause = 500 + Math.random() * 1500;
+        setTimeout(playAmbientLoop, duration * 1000 + pause);
+    }
+    
+    // Autostart beim ersten User-Klick (Browser-Policy)
+    function tryAutostart() {
+        if (!audioContext) {
+            initAudio();
+            document.removeEventListener('click', tryAutostart);
+            document.removeEventListener('touchstart', tryAutostart);
+        }
+    }
+    
+    // Fallback: Bei erstem Klick starten
+    document.addEventListener('click', tryAutostart, { once: true });
+    document.addEventListener('touchstart', tryAutostart, { once: true });
+    
+    // Direkter Autostart-Versuch
+    setTimeout(() => {
+        try {
+            initAudio();
+        } catch(e) {
+            console.log('Autoplay blockiert - wartet auf User-Interaktion');
+        }
+    }, 1000);
+})();
+
+</script>
+
 <script>
 function changeMonth(year, month) {
     if (month < 1) {
@@ -3503,10 +3980,66 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
+<script>
+// Kontaktformular AJAX-Handler
+document.addEventListener('DOMContentLoaded', function() {
+    const contactForm = document.getElementById('contact-form');
+    if (contactForm) {
+        contactForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const feedback = document.getElementById('contact-feedback');
+            const submitBtn = this.querySelector('button[type="submit"]');
+            
+            // Loading State
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Wird gesendet...';
+            feedback.innerHTML = '<p style="color: #666;">⏳ Nachricht wird gesendet...</p>';
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    feedback.innerHTML = `<p style="color: #4CAF50; padding: 15px; background: #e8f5e9; border-radius: 5px;">✓ ${data.message}</p>`;
+                    contactForm.reset();
+                } else {
+                    feedback.innerHTML = `<p style="color: #f44336; padding: 15px; background: #ffebee; border-radius: 5px;">✗ ${data.message}</p>`;
+                }
+            })
+            .catch(error => {
+                feedback.innerHTML = '<p style="color: #f44336; padding: 15px; background: #ffebee; border-radius: 5px;">✗ Fehler beim Senden. Bitte versuchen Sie es später erneut.</p>';
+                console.error('Fehler:', error);
+            })
+            .finally(() => {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Nachricht senden';
+            });
+        });
+    }
+});
+</script>
 
 
 
+
+
+
+ 
 
 
 </body>
+ 
+ 
+
+
+
+
+
 </html>
