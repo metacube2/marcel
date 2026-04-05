@@ -416,6 +416,7 @@ body {
     <div class="btn-row">
       <button class="btn-sm" onclick="preset('iec_vu')">IEC VU</button>
       <button class="btn-sm" onclick="preset('bbc_ppm')">BBC PPM</button>
+      <button class="btn-sm" onclick="preset('natural_vu')">Natural VU</button>
       <button class="btn-sm" onclick="preset('bouncy')">Bouncy</button>
       <button class="btn-sm" onclick="preset('heavy')">Heavy</button>
       <button class="btn-sm" onclick="preset('fast')">Fast</button>
@@ -590,6 +591,7 @@ function preset(name){
   const P={
     iec_vu:{mass:1.0,damping:1.5,spring:4.0,gravity:0},
     bbc_ppm:{mass:0.3,damping:2.0,spring:12.0,gravity:0},
+    natural_vu:{mass:1.35,damping:2.6,spring:6.4,gravity:0.1},
     bouncy:{mass:0.6,damping:0.4,spring:6.0,gravity:0},
     heavy:{mass:3.0,damping:2.5,spring:2.0,gravity:1.0},
     fast:{mass:0.1,damping:1.8,spring:15.0,gravity:0},
@@ -658,9 +660,10 @@ function drawVU(level, peak){
   const ctx = vuCtx;
   ctx.clearRect(0,0,w,h);
 
-  // Center pivot point
-  const cx = w/2, cy = h + 40;
-  const radius = h + 20;
+  // Center pivot point (inside canvas so needle is always visible)
+  const cx = w/2;
+  const cy = h - 22;
+  const radius = Math.min(w * 0.45, h * 0.78);
 
   // Scale arc
   const arcStart = Math.PI + 0.35;
@@ -703,7 +706,7 @@ function drawVU(level, peak){
   // "VU" label
   ctx.font = 'italic 24px "Instrument Serif"';
   ctx.fillStyle = '#8a7a60';
-  ctx.fillText('VU', cx, h*0.45);
+  ctx.fillText('VU', cx, h*0.62);
 
   // Sub minor ticks
   for(let p=0; p<=100; p+=2){
