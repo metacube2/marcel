@@ -449,7 +449,12 @@ body {
       <b>IEC True Ballistics</b> — Lobdell-Modell<br>
       |x| → Biquad LPF 2.224 Hz, Q 0.6053<br>
       300ms Anstiegszeit, ~1% Überschwingen<br>
-      <span style="color:#555">Der Filter <i>ist</i> die Nadelphysik.</span>
+      <span style="color:#555">Der Filter <i>ist</i> die Nadelphysik (+ kurzer Transient-Assist).</span>
+    </div>
+    <div class="iec-box" id="natural-box" style="display:none">
+      <b>Natural+</b> — neue Ballistikformel<br>
+      Hüllkurve mit separatem Attack/Release + 2.-Ordnung Nadelmodell<br>
+      Natürliches Einschwingen, weniger Zappeln, weicher Rücklauf.
     </div>
     <div class="iec-box" id="natural-box" style="display:none">
       <b>Natural+</b> — neue Ballistikformel<br>
@@ -672,8 +677,8 @@ function drawVU(level, peak){
   const cy = h - 22;
   const radius = Math.min(w * 0.45, h * 0.78);
 
-  // Scale arc
-  const arcStart = Math.PI + 0.35;
+  // Scale arc (immer obere Hälfte, links -> rechts)
+  const arcStart = -2.80;
   const arcEnd = -0.35;
 
   // Draw scale markings
@@ -1070,6 +1075,11 @@ class PhysicsVU:
         self._iec_coeffs = self._calc_biquad_lpf(2.224, 0.6053)
         self._iec_z = np.zeros(2)
         self._iec_level = 0.0
+        self._iec_fast = 0.0
+        self.iec_transient_boost = 0.22
+
+        # Natural+ Formel (neue Ballistik)
+        self._natural_env = 0.0
 
         # Natural+ Formel (neue Ballistik)
         self._natural_env = 0.0
@@ -1156,7 +1166,19 @@ class PhysicsVU:
         if self.mode == 'iec_true':
             rect = np.abs(mono).astype(np.float64)
             filt = self._biquad_process(self._iec_coeffs, self._iec_z, rect)
-            self._iec_level = float(filt[-1])
+            # Kleiner schneller Pfad gegen subjektiven Bass-Delay
+            block_dt = max(1.0 / self.sample_rate, len(rect) / self.sample_rate)
+            block_peak = float(np.max(rect))
+            atk_t = 0.012
+            rel_t = 0.140
+            alpha_a = 1.0 - math.exp(-block_dt / atk_t)
+            alpha_r = 1.0 - math.exp(-block_dt / rel_t)
+            alpha = alpha_a if block_peak > self._iec_fast else alpha_r
+            self._iec_fast += (block_peak - self._iec_fast) * alpha
+
+            iec_slow = float(filt[-1])
+            self._iec_level = ((1.0 - self.iec_transient_boost) * iec_slow +
+                               self.iec_transient_boost * self._iec_fast)
 
         # ── Audio Output ──
         # Monitor: Signal hören (mit Filter/Solo je nach Mode)
