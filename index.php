@@ -1398,35 +1398,35 @@ class AdminManager {
         $output .= '<div class="setting-row">';
         $output .= '<span class="setting-label">Hero-Titel (DE)</span>';
         $output .= '<div class="setting-input">';
-        $output .= '<input type="text" id="setting-hero-welcome" class="text-input" placeholder="' . htmlspecialchars($siteConfig['welcomeDe']) . '" value="' . htmlspecialchars((string)($settingsManager->get('content.hero_welcome_de') ?? '')) . '">';
+        $output .= '<input type="text" id="setting-hero-welcome" class="text-input" placeholder="' . htmlspecialchars($siteConfig['welcomeDe']) . '" value="' . htmlspecialchars($settingsManager->get('content.hero_welcome_de')) . '">';
         $output .= '</div>';
         $output .= '</div>';
 
         $output .= '<div class="setting-row">';
         $output .= '<span class="setting-label">Hero-Untertitel (DE)</span>';
         $output .= '<div class="setting-input">';
-        $output .= '<textarea id="setting-hero-region-text" class="textarea-input" rows="2" placeholder="Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!">' . htmlspecialchars((string)($settingsManager->get('content.hero_region_text_de') ?? '')) . '</textarea>';
+        $output .= '<textarea id="setting-hero-region-text" class="textarea-input" rows="2" placeholder="Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!">' . htmlspecialchars($settingsManager->get('content.hero_region_text_de')) . '</textarea>';
         $output .= '</div>';
         $output .= '</div>';
 
         $output .= '<div class="setting-row">';
         $output .= '<span class="setting-label">Ortsflagge ALT-Text (DE)</span>';
         $output .= '<div class="setting-input">';
-        $output .= '<input type="text" id="setting-local-flag-alt" class="text-input" placeholder="Ortsflagge" value="' . htmlspecialchars((string)($settingsManager->get('content.local_flag_alt_de') ?? '')) . '">';
+        $output .= '<input type="text" id="setting-local-flag-alt" class="text-input" placeholder="Ortsflagge" value="' . htmlspecialchars($settingsManager->get('content.local_flag_alt_de')) . '">';
         $output .= '</div>';
         $output .= '</div>';
 
         $output .= '<div class="setting-row">';
         $output .= '<span class="setting-label">Spenden-Text (DE)</span>';
         $output .= '<div class="setting-input">';
-        $output .= '<textarea id="setting-donation-callout" class="textarea-input" rows="4" placeholder="Gefällt dir die Livecam? Unterstütze das Projekt ...">' . htmlspecialchars((string)($settingsManager->get('content.donation_callout_de') ?? '')) . '</textarea>';
+        $output .= '<textarea id="setting-donation-callout" class="textarea-input" rows="4" placeholder="Gefällt dir die Livecam? Unterstütze das Projekt ...">' . htmlspecialchars($settingsManager->get('content.donation_callout_de')) . '</textarea>';
         $output .= '</div>';
         $output .= '</div>';
 
         $output .= '<div class="setting-row">';
         $output .= '<span class="setting-label">TWINT-Infotext (DE)</span>';
         $output .= '<div class="setting-input">';
-        $output .= '<textarea id="setting-twint-support-text" class="textarea-input" rows="4" placeholder="Unterstütze die Aurora Livecam mit deiner Spende...">' . htmlspecialchars((string)($settingsManager->get('content.twint_support_text_de') ?? '')) . '</textarea>';
+        $output .= '<textarea id="setting-twint-support-text" class="textarea-input" rows="4" placeholder="Unterstütze die Aurora Livecam mit deiner Spende...">' . htmlspecialchars($settingsManager->get('content.twint_support_text_de')) . '</textarea>';
         $output .= '</div>';
         $output .= '</div>';
         $output .= '</div>'; // settings-group
