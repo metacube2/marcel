@@ -9,6 +9,7 @@ Audio-Passthrough und Physik-Visualisierung.
 
 import requests, time, argparse, numpy as np, sys, math
 import threading, json, psutil
+from pathlib import Path
 from flask import Flask, render_template_string, jsonify, request as flask_request
 
 try:
@@ -28,6 +29,7 @@ disk_dial_uid = None
 running = False
 current_level = 0
 current_peak = 0
+SETTINGS_FILE = Path(__file__).with_name("vu1_audio_settings.json")
 
 # ══════════════════════════════════════════════════════════════
 # HTML / CSS / JS — Skeuomorphes VU-Meter
@@ -1380,6 +1382,34 @@ class PhysicsVU:
         return self.needle_pos, self.peak_pos
 
 
+# ── Persistenz: zuletzt gewählte Audio-Geräte ──
+def load_audio_settings():
+    defaults = {"audio_device_in": None, "audio_device_out": -1}
+    try:
+        if not SETTINGS_FILE.exists():
+            return defaults
+        data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+        in_dev = data.get("audio_device_in", None)
+        out_dev = data.get("audio_device_out", -1)
+        if out_dev is None:
+            out_dev = -1
+        return {"audio_device_in": in_dev, "audio_device_out": out_dev}
+    except Exception as e:
+        print(f"⚠️ Konnte Audio-Settings nicht laden: {e}")
+        return defaults
+
+
+def save_audio_settings(in_dev, out_dev):
+    try:
+        payload = {
+            "audio_device_in": in_dev,
+            "audio_device_out": out_dev if out_dev is not None else -1
+        }
+        SETTINGS_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"⚠️ Konnte Audio-Settings nicht speichern: {e}")
+
+
 # ══════════════════════════════════════════════════════════════
 # Flask Routes
 # ══════════════════════════════════════════════════════════════
@@ -1427,6 +1457,7 @@ def set_device(which, dev_id):
                 if meter.start():
                     running = True
                     threading.Thread(target=update_loop, daemon=True).start()
+    save_audio_settings(app.config.get('audio_device_in'), app.config.get('audio_device_out', -1))
     return jsonify({"ok": True})
 
 @app.route('/toggle')
@@ -1566,7 +1597,7 @@ def update_loop():
 # ── Main ──
 
 def main():
-    global client, dial_uid, meter
+    global client, dial_uid, meter, running
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--api-key", required=True)
@@ -1576,8 +1607,13 @@ def main():
     parser.add_argument("--port", type=int, default=8080)
     args = parser.parse_args()
 
-    app.config['audio_device_in'] = args.audio_device
-    app.config['audio_device_out'] = args.output_device
+    saved = load_audio_settings()
+    chosen_in = args.audio_device if args.audio_device is not None else saved.get('audio_device_in')
+    chosen_out = args.output_device if args.output_device is not None else saved.get('audio_device_out', -1)
+
+    app.config['audio_device_in'] = chosen_in
+    app.config['audio_device_out'] = chosen_out if chosen_out is not None else -1
+    save_audio_settings(app.config['audio_device_in'], app.config['audio_device_out'])
 
     client = VU1Client(api_key=args.api_key)
     dials = client.get_dials()
@@ -1601,7 +1637,19 @@ def main():
         globals()['disk_dial_uid'] = others[1]
         print(f"✅ Disk-Dial:   ({others[1][:8]}…)")
 
-    meter = PhysicsVU(device_in=args.audio_device, device_out=args.output_device)
+    out_for_meter = app.config['audio_device_out']
+    meter = PhysicsVU(
+        device_in=app.config['audio_device_in'],
+        device_out=out_for_meter if out_for_meter is not None and out_for_meter >= 0 else None
+    )
+
+    # Auto-Start mit gespeicherten Geräten
+    if meter.start():
+        running = True
+        threading.Thread(target=update_loop, daemon=True).start()
+        print("▶ Auto-Start aktiv (gespeicherte Audio-Ein-/Ausgänge)")
+    else:
+        print("⚠️ Auto-Start fehlgeschlagen; bitte Geräte prüfen und manuell starten.")
 
     print(f"\n🎛️  VU1 Meter Web GUI v3")
     print(f"{'='*40}")
