@@ -410,12 +410,14 @@ body {
       <button class="btn-sm active" id="mode-full" onclick="setMode('full')">Breitband</button>
       <button class="btn-sm" id="mode-dual" onclick="setMode('dualband')">Dual-Band</button>
       <button class="btn-sm" id="mode-iec" onclick="setMode('iec_true')">IEC True</button>
+      <button class="btn-sm" id="mode-natural" onclick="setMode('natural_formula')">Natural+</button>
     </div>
 
     <!-- Presets -->
     <div class="btn-row">
       <button class="btn-sm" onclick="preset('iec_vu')">IEC VU</button>
       <button class="btn-sm" onclick="preset('bbc_ppm')">BBC PPM</button>
+      <button class="btn-sm" onclick="preset('natural_vu')">Natural VU</button>
       <button class="btn-sm" onclick="preset('bouncy')">Bouncy</button>
       <button class="btn-sm" onclick="preset('heavy')">Heavy</button>
       <button class="btn-sm" onclick="preset('fast')">Fast</button>
@@ -447,7 +449,12 @@ body {
       <b>IEC True Ballistics</b> — Lobdell-Modell<br>
       |x| → Biquad LPF 2.224 Hz, Q 0.6053<br>
       300ms Anstiegszeit, ~1% Überschwingen<br>
-      <span style="color:#555">Der Filter <i>ist</i> die Nadelphysik.</span>
+      <span style="color:#555">Der Filter <i>ist</i> die Nadelphysik (+ kurzer Transient-Assist).</span>
+    </div>
+    <div class="iec-box" id="natural-box" style="display:none">
+      <b>Natural+</b> — neue Ballistikformel<br>
+      Hüllkurve mit separatem Attack/Release + 2.-Ordnung Nadelmodell<br>
+      Natürliches Einschwingen, weniger Zappeln, weicher Rücklauf.
     </div>
 
     <!-- Physics sliders -->
@@ -561,10 +568,11 @@ function setMode(mode){
   fetch('/set/mode/'+mode);
   document.getElementById('dualband-box').style.display=mode==='dualband'?'block':'none';
   document.getElementById('iec-box').style.display=mode==='iec_true'?'block':'none';
-  document.getElementById('physics-ctrls').style.display=mode==='iec_true'?'none':'block';
-  ['full','dual','iec'].forEach(m=>{
+  document.getElementById('natural-box').style.display=mode==='natural_formula'?'block':'none';
+  document.getElementById('physics-ctrls').style.display=(mode==='iec_true'||mode==='natural_formula')?'none':'block';
+  ['full','dual','iec','natural'].forEach(m=>{
     const btn=document.getElementById('mode-'+m);
-    const act=(m==='full'&&mode==='full')||(m==='dual'&&mode==='dualband')||(m==='iec'&&mode==='iec_true');
+    const act=(m==='full'&&mode==='full')||(m==='dual'&&mode==='dualband')||(m==='iec'&&mode==='iec_true')||(m==='natural'&&mode==='natural_formula');
     btn.classList.toggle('active', act);
   });
 }
@@ -590,6 +598,7 @@ function preset(name){
   const P={
     iec_vu:{mass:1.0,damping:1.5,spring:4.0,gravity:0},
     bbc_ppm:{mass:0.3,damping:2.0,spring:12.0,gravity:0},
+    natural_vu:{mass:1.35,damping:2.6,spring:6.4,gravity:0.1},
     bouncy:{mass:0.6,damping:0.4,spring:6.0,gravity:0},
     heavy:{mass:3.0,damping:2.5,spring:2.0,gravity:1.0},
     fast:{mass:0.1,damping:1.8,spring:15.0,gravity:0},
@@ -658,9 +667,10 @@ function drawVU(level, peak){
   const ctx = vuCtx;
   ctx.clearRect(0,0,w,h);
 
-  // Center pivot point
-  const cx = w/2, cy = h + 40;
-  const radius = h + 20;
+  // Center pivot point (inside canvas so needle is always visible)
+  const cx = w/2;
+  const cy = h - 22;
+  const radius = Math.min(w * 0.45, h * 0.78);
 
   // Scale arc
   const arcStart = Math.PI + 0.35;
@@ -703,7 +713,7 @@ function drawVU(level, peak){
   // "VU" label
   ctx.font = 'italic 24px "Instrument Serif"';
   ctx.fillStyle = '#8a7a60';
-  ctx.fillText('VU', cx, h*0.45);
+  ctx.fillText('VU', cx, h*0.62);
 
   // Sub minor ticks
   for(let p=0; p<=100; p+=2){
@@ -1060,6 +1070,11 @@ class PhysicsVU:
         self._iec_coeffs = self._calc_biquad_lpf(2.224, 0.6053)
         self._iec_z = np.zeros(2)
         self._iec_level = 0.0
+        self._iec_fast = 0.0
+        self.iec_transient_boost = 0.22
+
+        # Natural+ Formel (neue Ballistik)
+        self._natural_env = 0.0
 
     # ── Biquad helpers ──
     def _calc_biquad(self, fc):
@@ -1143,7 +1158,19 @@ class PhysicsVU:
         if self.mode == 'iec_true':
             rect = np.abs(mono).astype(np.float64)
             filt = self._biquad_process(self._iec_coeffs, self._iec_z, rect)
-            self._iec_level = float(filt[-1])
+            # Kleiner schneller Pfad gegen subjektiven Bass-Delay
+            block_dt = max(1.0 / self.sample_rate, len(rect) / self.sample_rate)
+            block_peak = float(np.max(rect))
+            atk_t = 0.012
+            rel_t = 0.140
+            alpha_a = 1.0 - math.exp(-block_dt / atk_t)
+            alpha_r = 1.0 - math.exp(-block_dt / rel_t)
+            alpha = alpha_a if block_peak > self._iec_fast else alpha_r
+            self._iec_fast += (block_peak - self._iec_fast) * alpha
+
+            iec_slow = float(filt[-1])
+            self._iec_level = ((1.0 - self.iec_transient_boost) * iec_slow +
+                               self.iec_transient_boost * self._iec_fast)
 
         # ── Audio Output ──
         # Monitor: Signal hören (mit Filter/Solo je nach Mode)
@@ -1264,6 +1291,50 @@ class PhysicsVU:
             else:
                 if self.peak_hold_t > 0: self.peak_hold_t -= dt
                 else: self.peak_pos -= 20.0 * dt
+            self.peak_pos = max(0.0, min(100.0, self.peak_pos))
+            return self.needle_pos, self.peak_pos
+
+        # Natural+ (eigene Formel):
+        # 1) getrennte Attack/Release-Hüllkurve
+        # 2) 2.-Ordnung Nadelmodell für natürliches Ein-/Ausschwingen
+        if self.mode == 'natural_formula':
+            target = self._rms_to_percent(self._latest_rms)
+
+            atk_t = 0.085   # schneller Angriff
+            rel_t = 0.650   # weicher Rücklauf
+            alpha_a = 1.0 - math.exp(-dt / atk_t)
+            alpha_r = 1.0 - math.exp(-dt / rel_t)
+            alpha = alpha_a if target > self._natural_env else alpha_r
+            self._natural_env += (target - self._natural_env) * alpha
+
+            # 2nd-order Needle (kritisch nahe gedämpft)
+            stiffness = 58.0
+            damping = 14.5
+            acc = stiffness * (self._natural_env - self.needle_pos) - damping * self.needle_vel
+            self.needle_vel += acc * dt
+            self.needle_pos += self.needle_vel * dt
+            self.needle_pos = max(0.0, min(100.0, self.needle_pos))
+
+            # Bei sehr kleinen Pegeln ruhig auf 0 setzen (kein Mikrozappeln)
+            if self._natural_env < 0.3 and self.needle_pos < 0.3:
+                self._natural_env = 0.0
+                self.needle_pos = 0.0
+                self.needle_vel *= 0.6
+
+            self._target = self._natural_env
+            self._f_spring = 0.0
+            self._f_damping = 0.0
+            self._f_gravity = 0.0
+
+            peak_t = self._rms_to_percent(self._latest_peak)
+            if peak_t > self.peak_pos:
+                self.peak_pos = peak_t
+                self.peak_hold_t = 1.2
+            else:
+                if self.peak_hold_t > 0:
+                    self.peak_hold_t -= dt
+                else:
+                    self.peak_pos -= 16.0 * dt
             self.peak_pos = max(0.0, min(100.0, self.peak_pos))
             return self.needle_pos, self.peak_pos
 
@@ -1411,7 +1482,11 @@ def set_param(param, value):
     if not meter: return jsonify({"ok": False})
     if param == 'mode':
         meter.mode = value
-        if value == 'iec_true': meter._iec_z[:] = 0
+        if value == 'iec_true':
+            meter._iec_z[:] = 0
+            meter._iec_fast = meter._latest_peak
+        if value == 'natural_formula':
+            meter._natural_env = meter.needle_pos
     elif param == 'monitor':
         meter.monitor = value == '1'
     elif param == 'bypass':
@@ -1444,7 +1519,7 @@ def reset():
         meter.needle_pos=0; meter.needle_vel=0; meter.peak_pos=0
         meter.mode='full'; meter.monitor=False; meter.bypass=False; meter.solo='off'
         meter.band_crossover=250; meter.band_lo_weight=0.6; meter.band_hi_weight=0.4
-        meter._iec_z[:]=0; meter._iec_level=0
+        meter._iec_z[:]=0; meter._iec_level=0; meter._iec_fast=0; meter._natural_env=0
     return jsonify({"ok": True})
 
 
