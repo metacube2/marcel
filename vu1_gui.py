@@ -456,6 +456,11 @@ body {
       Hüllkurve mit separatem Attack/Release + 2.-Ordnung Nadelmodell<br>
       Natürliches Einschwingen, weniger Zappeln, weicher Rücklauf.
     </div>
+    <div class="iec-box" id="natural-box" style="display:none">
+      <b>Natural+</b> — neue Ballistikformel<br>
+      Hüllkurve mit separatem Attack/Release + 2.-Ordnung Nadelmodell<br>
+      Natürliches Einschwingen, weniger Zappeln, weicher Rücklauf.
+    </div>
 
     <!-- Physics sliders -->
     <div id="physics-ctrls">
@@ -669,7 +674,7 @@ function drawVU(level, peak){
 
   // Center pivot point (inside canvas so needle is always visible)
   const cx = w/2;
-  const cy = h - 12;
+  const cy = h - 22;
   const radius = Math.min(w * 0.45, h * 0.78);
 
   // Scale arc (immer obere Hälfte, links -> rechts)
@@ -1072,6 +1077,9 @@ class PhysicsVU:
         self._iec_level = 0.0
         self._iec_fast = 0.0
         self.iec_transient_boost = 0.22
+
+        # Natural+ Formel (neue Ballistik)
+        self._natural_env = 0.0
 
         # Natural+ Formel (neue Ballistik)
         self._natural_env = 0.0
@@ -1484,7 +1492,6 @@ def set_param(param, value):
         meter.mode = value
         if value == 'iec_true':
             meter._iec_z[:] = 0
-            meter._iec_fast = meter._latest_peak
         if value == 'natural_formula':
             meter._natural_env = meter.needle_pos
     elif param == 'monitor':
@@ -1519,7 +1526,7 @@ def reset():
         meter.needle_pos=0; meter.needle_vel=0; meter.peak_pos=0
         meter.mode='full'; meter.monitor=False; meter.bypass=False; meter.solo='off'
         meter.band_crossover=250; meter.band_lo_weight=0.6; meter.band_hi_weight=0.4
-        meter._iec_z[:]=0; meter._iec_level=0; meter._iec_fast=0; meter._natural_env=0
+        meter._iec_z[:]=0; meter._iec_level=0; meter._natural_env=0
     return jsonify({"ok": True})
 
 
