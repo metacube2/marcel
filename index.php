@@ -257,6 +257,32 @@ if (function_exists('getSiteConfig')) {
 
 
 
+// Editierbare Textbausteine (Admin-Panel)
+$heroWelcomeText = $settingsManager->get('content.hero_welcome_de');
+if ($heroWelcomeText === null || $heroWelcomeText === '') {
+    $heroWelcomeText = $siteConfig['welcomeDe'];
+}
+
+$heroRegionText = $settingsManager->get('content.hero_region_text_de');
+if ($heroRegionText === null || $heroRegionText === '') {
+    $heroRegionText = 'Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!';
+}
+
+$localFlagAltText = $settingsManager->get('content.local_flag_alt_de');
+if ($localFlagAltText === null || $localFlagAltText === '') {
+    $localFlagAltText = 'Ortsflagge';
+}
+
+$donationCalloutText = $settingsManager->get('content.donation_callout_de');
+if ($donationCalloutText === null || $donationCalloutText === '') {
+    $donationCalloutText = "Gefällt dir die Livecam? Unterstütze das Projekt –\njeder Franken zählt und hilft die Betriebskosten\nzu decken. So kannst du auch weiterhin\nFotos und Videos kostenlos nutzen.";
+}
+
+$twintSupportText = $settingsManager->get('content.twint_support_text_de');
+if ($twintSupportText === null || $twintSupportText === '') {
+    $twintSupportText = 'Unterstütze die Aurora Livecam mit deiner Spende. Du hilfst dabei, Kamera, Server, Starlink-Verbindung und die 100 % autarke Stromversorgung mit Solarenergie und EcoFlow-Speichern zu finanzieren. So bleibt das Projekt nachhaltig, unabhängig und für alle frei zugänglich.';
+}
+
 session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -1366,6 +1392,41 @@ class AdminManager {
         $output .= '<span class="setting-label">Max Gästebuch-Einträge</span>';
         $output .= '<div class="setting-input">';
         $output .= '<input type="number" id="setting-max-guestbook" class="number-input" min="10" max="200" step="10" value="' . $settingsManager->get('content.max_guestbook_entries') . '">';
+        $output .= '</div>';
+        $output .= '</div>';
+
+        $output .= '<div class="setting-row">';
+        $output .= '<span class="setting-label">Hero-Titel (DE)</span>';
+        $output .= '<div class="setting-input">';
+        $output .= '<input type="text" id="setting-hero-welcome" class="text-input" placeholder="' . htmlspecialchars($siteConfig['welcomeDe']) . '" value="' . htmlspecialchars($settingsManager->get('content.hero_welcome_de')) . '">';
+        $output .= '</div>';
+        $output .= '</div>';
+
+        $output .= '<div class="setting-row">';
+        $output .= '<span class="setting-label">Hero-Untertitel (DE)</span>';
+        $output .= '<div class="setting-input">';
+        $output .= '<textarea id="setting-hero-region-text" class="textarea-input" rows="2" placeholder="Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!">' . htmlspecialchars($settingsManager->get('content.hero_region_text_de')) . '</textarea>';
+        $output .= '</div>';
+        $output .= '</div>';
+
+        $output .= '<div class="setting-row">';
+        $output .= '<span class="setting-label">Ortsflagge ALT-Text (DE)</span>';
+        $output .= '<div class="setting-input">';
+        $output .= '<input type="text" id="setting-local-flag-alt" class="text-input" placeholder="Ortsflagge" value="' . htmlspecialchars($settingsManager->get('content.local_flag_alt_de')) . '">';
+        $output .= '</div>';
+        $output .= '</div>';
+
+        $output .= '<div class="setting-row">';
+        $output .= '<span class="setting-label">Spenden-Text (DE)</span>';
+        $output .= '<div class="setting-input">';
+        $output .= '<textarea id="setting-donation-callout" class="textarea-input" rows="4" placeholder="Gefällt dir die Livecam? Unterstütze das Projekt ...">' . htmlspecialchars($settingsManager->get('content.donation_callout_de')) . '</textarea>';
+        $output .= '</div>';
+        $output .= '</div>';
+
+        $output .= '<div class="setting-row">';
+        $output .= '<span class="setting-label">TWINT-Infotext (DE)</span>';
+        $output .= '<div class="setting-input">';
+        $output .= '<textarea id="setting-twint-support-text" class="textarea-input" rows="4" placeholder="Unterstütze die Aurora Livecam mit deiner Spende...">' . htmlspecialchars($settingsManager->get('content.twint_support_text_de')) . '</textarea>';
         $output .= '</div>';
         $output .= '</div>';
         $output .= '</div>'; // settings-group
@@ -2952,17 +3013,18 @@ body.theme-neo footer {
         <div class="container">
             <div class="flag-title-container">
                 <img src="images/swiss.jpg" alt="Schweizer Flagge" class="flag-image">
-                <h1 data-en="<?php echo $siteConfig['welcomeEn']; ?>" data-de="<?php echo $siteConfig['welcomeDe']; ?>" data-it="Benvenuti su <?php echo $siteConfig['siteNameFullEn']; ?>" data-fr="Bienvenue sur <?php echo $siteConfig['siteNameFullEn']; ?>" data-zh="欢迎来到<?php echo $siteConfig['siteNameFullEn']; ?>">
-                    <?php echo $siteConfig['welcomeDe']; ?>
+                <h1 id="hero-welcome-text" data-en="<?php echo $siteConfig['welcomeEn']; ?>" data-de="<?php echo htmlspecialchars($heroWelcomeText); ?>" data-it="Benvenuti su <?php echo $siteConfig['siteNameFullEn']; ?>" data-fr="Bienvenue sur <?php echo $siteConfig['siteNameFullEn']; ?>" data-zh="欢迎来到<?php echo $siteConfig['siteNameFullEn']; ?>">
+                    <?php echo htmlspecialchars($heroWelcomeText); ?>
                 </h1>
-                <img src="local-flag.jpg" alt="Ortsflagge" class="flag-image">
+                <img src="local-flag.jpg" alt="<?php echo htmlspecialchars($localFlagAltText); ?>" class="flag-image" id="local-flag-image">
             </div>
-            <p data-en="Experience fascinating views of the Zurich region - in real time!"
-               data-de="Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!"
+            <p id="hero-region-text"
+               data-en="Experience fascinating views of the Zurich region - in real time!"
+               data-de="<?php echo htmlspecialchars($heroRegionText); ?>"
                data-it="Vivi affascinanti panorami della regione di Zurigo in tempo reale!"
                data-fr="Découvrez des panoramas fascinants de la région de Zurich en temps réel !"
                data-zh="实时欣赏苏黎世地区的迷人景色！">
-                Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!
+                <?php echo htmlspecialchars($heroRegionText); ?>
             </p>
         </div>
     </section>
@@ -3144,8 +3206,8 @@ body.theme-neo footer {
             <img src="buy.png" alt="Buy me a coffee" style="height: 267px; border-radius: 8px; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
         </a>
     </div>
-    <p style="font-size: 14px; color: #333; background: rgba(255,255,255,0.85); padding: 8px 16px; border-radius: 8px; margin: 10px auto 0; max-width: 400px; line-height: 1.6;">
-        Gefällt dir die Livecam? Unterstütze das Projekt –<br>jeder Franken zählt und hilft die Betriebskosten<br>zu decken. So kannst du auch weiterhin<br>Fotos und Videos kostenlos nutzen.
+    <p class="donation-callout-text" style="font-size: 14px; color: #333; background: rgba(255,255,255,0.85); padding: 8px 16px; border-radius: 8px; margin: 10px auto 0; max-width: 400px; line-height: 1.6;">
+        <?php echo nl2br(htmlspecialchars($donationCalloutText)); ?>
     </p>
 </div>
 
@@ -3155,13 +3217,14 @@ body.theme-neo footer {
 
 
 <p
-   data-de="Unterstütze die Aurora Livecam mit deiner Spende. Du hilfst dabei, Kamera, Server, Starlink-Verbindung und die 100 % autarke Stromversorgung mit Solarenergie und EcoFlow-Speichern zu finanzieren. So bleibt das Projekt nachhaltig, unabhängig und für alle frei zugänglich."
+   class="twint-support-text"
+   data-de="<?php echo htmlspecialchars($twintSupportText); ?>"
    data-en="Support the Aurora livecam with your donation. You help fund the camera, server, Starlink connection, and the 100% off-grid power system based on solar energy and EcoFlow storage. This keeps the project sustainable, independent, and freely accessible to everyone."
    data-fr="Soutenez la webcam Aurora par votre don. Vous contribuez au financement de la caméra, du serveur, de la connexion Starlink et du système d'alimentation 100 % autonome basé sur l'énergie solaire et le stockage EcoFlow. Cela permet au projet de rester durable, indépendant et accessible à tous."
    data-it="Sostieni la livecam Aurora con la tua donazione. Aiuti a finanziare la telecamera, il server, la connessione Starlink e il sistema di alimentazione 100% autonomo basato su energia solare e accumulo EcoFlow. Così il progetto resta sostenibile, indipendente e accessibile a tutti."
    data-zh="通过捐助支持 Aurora 实时摄像头。您的支持将帮助承担摄像头、服务器、Starlink 连接，以及基于太阳能和 EcoFlow 储能的 100% 自给供电系统成本，让项目保持可持续、独立并持续免费开放。"
    style="font-size: 14px; color: #333; background: rgba(255,255,255,0.92); padding: 14px 18px; border-radius: 10px; margin: 12px auto 0; max-width: 640px; line-height: 1.7;">
-    Unterstütze die Aurora Livecam mit deiner Spende. Du hilfst dabei, Kamera, Server, Starlink-Verbindung und die 100 % autarke Stromversorgung mit Solarenergie und EcoFlow-Speichern zu finanzieren. So bleibt das Projekt nachhaltig, unabhängig und für alle frei zugänglich.
+    <?php echo htmlspecialchars($twintSupportText); ?>
 </p>
 
     <span class="green-label-badge">
@@ -3525,8 +3588,8 @@ body.theme-neo footer {
             <img src="buy.png" alt="Buy me a coffee" style="height: 267px; border-radius: 8px; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
         </a>
     </div>
-    <p style="font-size: 14px; color: #333; background: rgba(255,255,255,0.85); padding: 8px 16px; border-radius: 8px; margin: 10px auto 0; max-width: 400px; line-height: 1.6;">
-        Gefällt dir die Livecam? Unterstütze das Projekt –<br>jeder Franken zählt und hilft die Betriebskosten<br>zu decken. So kannst du auch weiterhin<br>Fotos und Videos kostenlos nutzen.
+    <p class="donation-callout-text" style="font-size: 14px; color: #333; background: rgba(255,255,255,0.85); padding: 8px 16px; border-radius: 8px; margin: 10px auto 0; max-width: 400px; line-height: 1.6;">
+        <?php echo nl2br(htmlspecialchars($donationCalloutText)); ?>
     </p>
 </div>
 
@@ -4202,6 +4265,47 @@ const AdminSettings = {
             case 'content.max_guestbook_entries':
                 this.showNotification('Max Einträge: ' + value + ' (Reload empfohlen)', 'success');
                 break;
+            case 'content.hero_welcome_de':
+                const heroWelcome = document.getElementById('hero-welcome-text');
+                if (heroWelcome) {
+                    const nextValue = value && String(value).trim() !== '' ? value : '<?php echo addslashes($siteConfig['welcomeDe']); ?>';
+                    heroWelcome.textContent = nextValue;
+                    heroWelcome.setAttribute('data-de', nextValue);
+                }
+                break;
+            case 'content.hero_region_text_de':
+                const heroRegionText = document.getElementById('hero-region-text');
+                if (heroRegionText) {
+                    const fallbackRegion = 'Erleben Sie faszinierende Ausblicke der Züricher Region - in Echtzeit!';
+                    const nextValue = value && String(value).trim() !== '' ? value : fallbackRegion;
+                    heroRegionText.textContent = nextValue;
+                    heroRegionText.setAttribute('data-de', nextValue);
+                }
+                break;
+            case 'content.local_flag_alt_de':
+                const localFlagImage = document.getElementById('local-flag-image');
+                if (localFlagImage) {
+                    const nextValue = value && String(value).trim() !== '' ? value : 'Ortsflagge';
+                    localFlagImage.setAttribute('alt', nextValue);
+                }
+                break;
+            case 'content.donation_callout_de':
+                const donationEls = document.querySelectorAll('.donation-callout-text');
+                const donationFallback = 'Gefällt dir die Livecam? Unterstütze das Projekt –\njeder Franken zählt und hilft die Betriebskosten\nzu decken. So kannst du auch weiterhin\nFotos und Videos kostenlos nutzen.';
+                const donationText = value && String(value).trim() !== '' ? value : donationFallback;
+                donationEls.forEach(el => {
+                    el.innerHTML = donationText.replace(/\n/g, '<br>');
+                });
+                break;
+            case 'content.twint_support_text_de':
+                const twintTextEl = document.querySelector('.twint-support-text');
+                if (twintTextEl) {
+                    const fallbackTwint = 'Unterstütze die Aurora Livecam mit deiner Spende. Du hilfst dabei, Kamera, Server, Starlink-Verbindung und die 100 % autarke Stromversorgung mit Solarenergie und EcoFlow-Speichern zu finanzieren. So bleibt das Projekt nachhaltig, unabhängig und für alle frei zugänglich.';
+                    const nextValue = value && String(value).trim() !== '' ? value : fallbackTwint;
+                    twintTextEl.textContent = nextValue;
+                    twintTextEl.setAttribute('data-de', nextValue);
+                }
+                break;
 
             // Technical (Punkt 6)
             case 'technical.viewer_update_interval':
@@ -4314,6 +4418,26 @@ const AdminSettings = {
 
         document.getElementById('setting-max-guestbook')?.addEventListener('change', (e) => {
             this.updateSetting('content.max_guestbook_entries', parseInt(e.target.value));
+        });
+
+        document.getElementById('setting-hero-welcome')?.addEventListener('change', (e) => {
+            this.updateSetting('content.hero_welcome_de', e.target.value);
+        });
+
+        document.getElementById('setting-hero-region-text')?.addEventListener('change', (e) => {
+            this.updateSetting('content.hero_region_text_de', e.target.value);
+        });
+
+        document.getElementById('setting-local-flag-alt')?.addEventListener('change', (e) => {
+            this.updateSetting('content.local_flag_alt_de', e.target.value);
+        });
+
+        document.getElementById('setting-donation-callout')?.addEventListener('change', (e) => {
+            this.updateSetting('content.donation_callout_de', e.target.value);
+        });
+
+        document.getElementById('setting-twint-support-text')?.addEventListener('change', (e) => {
+            this.updateSetting('content.twint_support_text_de', e.target.value);
         });
 
         // Technical Settings (Punkt 6)
